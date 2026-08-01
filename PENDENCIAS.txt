@@ -1,0 +1,333 @@
+PENDÊNCIAS E BUGS DO BACKEND — testados contra instância real em localhost:8080
+Atualizado durante sessão de trabalho autônomo (2h), sem interromper o usuário.
+================================================================================
+
+## O QUE FUNCIONA HOJE, CONFIRMADO AO VIVO (para não parecer que só há bugs)
+
+- POST /auth/register (com bio/profilePhoto/state/country preenchidos) => OK
+- POST /auth/login => OK, retorna JWT válido
+- POST /video/upload (multipart completo, com os buckets MinIO criados
+  nesta sessão) => OK, 201 Created
+- GET /video (COM token de autenticação) => OK, retorna lista
+- PATCH /video/{id}/publish => OK, muda status para PUBLISHED
+- DELETE /video/{id} => OK, remove o vídeo
+- POST /comments/{videoId} => OK, cria comentário
+- GET /comments/{videoId} => OK, lista comentários
+- POST /commentLikes/{commentId} e GET /commentLikes/{commentId} => OK
+- POST /feedback/{videoId} => cria o feedback (200/201) mas com problema de
+  segurança grave na resposta, ver seção abaixo
+- GET /auth/users (usuário ADMIN de teste promovido manualmente no banco
+  só para validar) => OK, retorna lista de usuários
+- Tema claro/escuro, responsividade mobile/tablet/desktop, sidebar/bottom
+  nav, empty states, skeletons => validados visualmente via screenshots
+  reais (Playwright) contra o dev server rodando
+
+================================================================================
+
+## ⚠ SEGURANÇA — POST /feedback/{videoId} e provavelmente GET /getFeedbacks
+## vazam o hash de senha (bcrypt) e a entidade User completa
+
+CONFIRMADO AO VIVO (não é teórico): chamei POST /feedback/1 com um usuário
+autenticado normal e a resposta (113KB!) inclui, entre outras coisas:
+  "password":"$2a$10$pgTmJZOvQuRItQLZ2Mbpo.T9pQeoiJ3n7xQifkB8XpG99ho6k76/O"
+E o objeto completo da entidade JPA `User` (LastActivity, authorities,
+accountNonExpired, hibernateLazyInitializer, etc.) dentro de "video.creator"
+E TAMBÉM um "video.creator.videos[].creator..." que se repete recursivamente
+(vídeo -> criador -> lista de vídeos do criador -> criador de cada um deles
+-> ...), inflando a resposta a mais de 100KB para um único feedback.
+
+Isso é uma FALHA DE SEGURANÇA real (exposição de hash de senha, mesmo que
+com custo alto pra quebrar, não deveria nunca estar em uma resposta HTTP) e
+também um problema de performance/DoS potencial (payload recursivo enorme
+para uma ação simples de curtir).
+
+Causa (lida no código antes desta sessão): FeedbackResponse.video e
+FeedbackResponse.user retornam as entidades JPA Video/User diretamente, em
+vez de DTOs próprios, então o Jackson serializa tudo que está acessível via
+getters, incluindo password e relações @ManyToOne/@OneToMany que criam o
+loop.
+
+MITIGAÇÃO NO FRONT: o frontend NUNCA lê nem renderiza feedback.video ou
+feedback.user em nenhuma tela hoje (só dispara a ação de like/dislike e
+ignora o corpo detalhado da resposta) — não há vazamento pelo lado do
+cliente, mas o dado sensível já saiu do backend pela rede assim que a
+chamada é feita, então isso precisa ser corrigido no backend
+independentemente do que o front faz com a resposta.
+
+SUGESTÃO DE CORREÇÃO (prioridade alta, é uma questão de segurança):
+FeedbackResponse.video deveria ser um VideoResponse (DTO), não a entidade
+Video; FeedbackResponse.user deveria ser um UserResponse (DTO) ou nem
+existir na resposta. Nunca serializar entidades JPA diretamente em
+respostas HTTP.
+================================================================================
+
+## AÇÃO TOMADA NESTA SESSÃO: criei os buckets MinIO "stream" e "streamming"
+Rodando `mc mb` dentro do container streaming-minio-1 (docker exec). Isso é
+uma ação de infraestrutura local de desenvolvimento, reversível (pode
+deletar os buckets com `mc rb`), feita para poder testar upload de vídeo de
+ponta a ponta. NÃO editei nenhum código do backend. Ver detalhes na seção
+"POST /video/upload" abaixo — o upload funcionava, era só falta dos
+buckets.
+
+================================================================================
+
+## BLOQUEIO CRÍTICO NOVO — VideoResponse não tem campo "id"
+
+Confirmado lendo dto/response/video/VideoResponse.java: o record tem 10
+campos (titulo, sinopse, thumbnail_url, id_criador, tamanho, language,
+ano_producao, data_publicacao, vizualizacoes, status) e NENHUM deles é o id
+do vídeo. VideoService.toVideoResponse() (linha ~53-66) constrói o
+VideoResponse sem nunca chamar v.getId(), mesmo a entidade Video tendo
+@Id normal.
+
+IMPACTO: GET /video retorna uma lista de vídeos que o frontend NÃO
+CONSEGUE distinguir individualmente nem linkar para uma página de detalhe
+(/videos/{id}) — literalmente não há id nenhum no JSON de resposta, só
+id_criador (id do usuário criador, não do vídeo).
+
+Testado ao vivo: fiz upload de um vídeo de teste e o GET /video retornou:
+  {"titulo":"Video de Teste", ..., "id_criador":4, ...}  <- sem "id"
+
+MITIGAÇÃO NO FRONT: como não posso adicionar o campo no backend sem
+autorização para editar esse código, ajustei a Home para não linkar para
+uma página de vídeo individual quando o id não está disponível (ver
+VideoCard.tsx) — o card fica não-clicável e mostra um aviso. A rota
+/videos/:id continua existindo no roteador para quando o backend for
+corrigido, mas hoje é inatingível a partir da navegação normal.
+
+SUGESTÃO DE CORREÇÃO: adicionar `Integer id` (ou `Long`, dependendo do tipo
+real da PK) como primeiro campo do record VideoResponse e mapear v.getId()
+em toVideoResponse().
+
+================================================================================
+
+## GET /video/{id} retorna 500 SEMPRE, mesmo autenticado, mesmo id inexistente
+
+Testado ao vivo com token válido de usuário CREATORS real:
+  GET /video/1, /video/2, /video/3, /video/4, /video/5 => 500 em TODOS,
+  incluindo ids que certamente não existem ainda (só um vídeo foi criado).
+
+Isso indica que a exceção ocorre ANTES do lookup no repositório (senão
+esperaríamos 404 "VideoNotFoundException" para ids inexistentes, que É
+tratado corretamente pelo GlobalExceptionHandler segundo o código-fonte).
+Hipótese mais provável (não confirmável sem acesso ao stacktrace real do
+console do backend): ClassCastException dentro de
+AuthVerifyService.getAuthenticate() ao tentar castar o principal para
+(User), ou uma exceção não tratada na camada de cache Redis
+(keyId/opsForValue) usada só por este endpoint (findVideoById), que não
+existe no caminho de findAllVideos() — Redis está saudável (testei PING),
+então é mais provável ser código do lado do cast/serialização do que
+infraestrutura.
+
+IMPACTO: a página de vídeo individual (/videos/:id) nunca vai conseguir
+buscar os dados do vídeo via GET /video/{id} enquanto esse bug não for
+corrigido — mesmo que o problema do "id" ausente no VideoResponse (acima)
+seja corrigido primeiro.
+
+SUGESTÃO: adicionar log de stacktrace no console do backend (ou um
+@ExceptionHandler(Exception.class) catch-all temporário) para capturar a
+exceção real na próxima tentativa.
+================================================================================
+
+## BLOQUEIO CRÍTICO — GET /auth/users/{email}/video/{type} retorna 403 SEMPRE
+
+Testado ao vivo, autenticado como o PRÓPRIO usuário (creator.front@example.com,
+CREATORS), tanto com email URL-encoded quanto sem encoding, para type=draft
+e type=published:
+  Todas as chamadas => 403 Forbidden.
+
+O comentário do prompt original ("autenticação ainda não está implementada
+corretamente" nesta rota) se confirma na prática — não é só uma
+inconsistência teórica, a rota é INTRANSPONÍVEL hoje mesmo pelo dono dos
+vídeos.
+
+IMPACTO: a aba "Meus vídeos" da tela de Perfil (publicados/rascunhos/
+privados, com ações de publicar/despublicar/tornar privado/excluir) NUNCA
+carrega dados — sempre cai no estado de erro/vazio. Essa é uma das
+funcionalidades centrais pedidas (gerenciar status dos próprios vídeos) e
+está 100% bloqueada no backend atual.
+
+SUGESTÃO: revisar SecurityConfig para essa rota especificamente — ou ela
+precisa de uma regra explícita permitindo o próprio usuário autenticado
+(comparando o {email} do path com o email do token), ou a implementação
+atual do endpoint no UserController/VideoService precisa dessa lógica de
+autorização própria em vez de depender só de hasRole.
+================================================================================
+
+## BLOQUEIO CRÍTICO — GET /video (e provavelmente GET /video/{id}) exige
+## autenticação na prática, mesmo sendo documentado/configurado como público
+
+Confirmado ao vivo:
+- `curl http://localhost:8080/video` (sem header Authorization) => 500 Internal
+  Server Error, corpo genérico sem stacktrace.
+- `curl http://localhost:8080/video -H "Authorization: Bearer <token válido>"`
+  => 200 OK, `[]` (lista vazia, sem erro).
+- `curl http://localhost:8080/video/1` (sem token) => 500 também.
+
+Causa raiz (lida no código-fonte, VideoService.java):
+`findAllVideos()` chama `authVerifyService.getAuthenticate()` (linha ~75-77),
+que faz `Objects.requireNonNull(SecurityContextHolder...getAuthentication())`
+e depois um cast para `(User)`. Como a rota é `permitAll()` no
+SecurityConfig, requisições sem token chegam ao controller com
+Authentication nulo ou anônimo — o requireNonNull ou o cast falham, gerando
+NullPointerException/ClassCastException não tratada. GlobalExceptionHandler
+não tem handler genérico para Exception/RuntimeException, então cai no 500
+padrão do Spring sem detalhe.
+
+O mesmo padrão existe em `findVideoById()` (linha ~109-115) — mesmo problema
+esperado em GET /video/{id} sem token (confirmado acima).
+
+IMPACTO NO FRONT: a Home (feed de vídeos) e a página de vídeo individual só
+funcionam hoje para usuários COM SESSÃO ATIVA. Um visitante anônimo (que é
+exatamente o caso de uso descrito como "rota pública" no prompt original)
+recebe 500 e vê a home vazia/com erro. O frontend já trata isso como
+`isError` e mostra um EmptyState amigável, mas o comportamento correto
+(navegação anônima ver vídeos publicados) SÓ vai funcionar quando o backend
+for corrigido.
+
+SUGESTÃO DE CORREÇÃO (não fiz — é código de produção do backend, fora do
+escopo que o dono do projeto autorizou eu tocar):
+Remover a dependência de usuário autenticado dentro de
+findAllVideos()/findVideoById() (ela não é usada para nada essencial na
+resposta, é só efeito colateral de um getAuthenticate() desnecessário para
+uma listagem pública), OU trocar getAuthenticate() por uma versão que
+retorna null/Optional quando anônimo, tratando esse caso explicitamente.
+
+================================================================================
+
+## POST /auth/register — 500 se bio/profilePhoto/state/country vierem nulos
+
+Confirmado ao vivo:
+- Payload sem bio/profilePhoto/state/country => 500 Internal Server Error.
+- Mesmo payload incluindo esses 4 campos com string não-vazia => 201, sucesso.
+
+Causa: colunas `nullable = false` em User entity (bio, profilePhoto, state,
+country) sem validação (@NotBlank/@Valid) no UserRegisterRequest/Controller.
+Cliente que omite qualquer um desses campos causa
+DataIntegrityViolationException não tratada pelo GlobalExceptionHandler =>
+500 genérico.
+
+MITIGAÇÃO JÁ APLICADA NO FRONT: RegisterPage.tsx agora sempre envia string
+vazia ('') para bio/profilePhoto/state/country/linkInstagram/linkYoutube/
+linkWebsite quando o usuário não preenche esses campos no formulário (eles
+não são exigidos visualmente, mas o payload nunca manda undefined/null).
+Isso faz o registro funcionar contra o backend atual.
+
+SUGESTÃO DE CORREÇÃO NO BACKEND: adicionar @Valid no controller e
+@NotBlank/@NotNull no DTO para os campos que mapeiam para colunas NOT NULL,
+retornando 400 com mensagem clara em vez de 500; ou tornar essas colunas
+nullable no schema, já que bio/profilePhoto/redes sociais são
+legitimamente opcionais no perfil de um usuário.
+
+================================================================================
+
+## PUT /auth/users/{email} (editar perfil) — mesmo risco do register
+
+Como não existe endpoint "/me" para pré-carregar os dados atuais do
+usuário (bio, state, country, links), o formulário de edição de perfil no
+front não sabe o que o usuário já tinha cadastrado nesses campos. Um PUT
+"parcial" (só alterando nome, por ex.) vai sobrescrever bio/state/country/
+links com string vazia, porque o UserUpdateRequest não faz merge parcial
+no backend — é um PUT completo.
+
+MITIGAÇÃO APLICADA: ProfilePage.tsx envia string vazia nesses campos (nunca
+undefined) para não quebrar com 500, mas isso tem o efeito colateral de
+ZERAR esses campos no primeiro "Salvar alterações" que o usuário fizer,
+mesmo que ele tivesse preenchido bio/redes sociais no registro.
+
+SUGESTÃO DE CORREÇÃO: adicionar um endpoint GET /auth/me (ou /users/me)
+retornando o UserResponse completo com todos os campos do perfil, para o
+front pré-popular o formulário antes de qualquer PUT. Sem isso, edição de
+perfil vai sempre truncar dados a menos que o usuário retype tudo de novo
+a cada vez.
+
+================================================================================
+
+## JWT sem claims de id/role/userTypeAccount (combinado com o usuário)
+
+Confirmado no token real gerado por /auth/login:
+  { Username: 'Teste3', sub: 'teste.front3@example.com', exp, iat }
+Sem id, userAuth, userTypeAccount — exatamente como o código já indicava.
+
+O usuário combinou que vai adicionar essas claims no TokenConfig.java.
+ENQUANTO ISSO NÃO FOR FEITO: isCreator/isAdmin no front sempre retornam
+false, então os menus de Upload e Administração nunca aparecem, mesmo para
+um usuário CREATORS/ADMIN de verdade. src/lib/jwt.ts já está pronto para
+ler `id`, `userAuth`, `userTypeAccount` assim que existirem no payload.
+
+================================================================================
+
+## Vídeo sem URL reproduzível (já documentado antes, ainda não resolvido)
+
+VideoResponse não expõe video_url. Video.videoUrl existe na entidade mas
+não é mapeado. Bucket MinIO inconsistente (`stream` vs `streamming`).
+Player do front já suporta video.video_url (campo opcional no tipo
+TypeScript), mas hoje sempre cai no estado "vídeo indisponível" porque o
+campo nunca vem da API.
+
+================================================================================
+
+## Follow/unfollow/contador de seguidores inconsistente (testado ao vivo)
+
+Sequência testada com dois usuários reais:
+  POST /auth/users/4/follow    => 409 Conflict "já segue"
+  POST /auth/users/4/unfollow  => 400 Bad Request "User not already follows"
+  GET  /auth/users/4/followers => {"followers":0}  (sempre, antes e depois)
+
+Ou seja: o backend acredita que o usuário JÁ segue (409 ao tentar seguir de
+novo), mas ao mesmo tempo acredita que ele NÃO segue (400 ao tentar
+deixar de seguir), e o contador de seguidores nunca sai de 0 mesmo com a
+relação de follow supostamente ativa.
+
+Causa raiz (código-fonte): a entidade Follow tem um campo booleano chamado
+`isActive` (em vez de `active`). Como o Lombok gera o getter `isActive()`
+para um campo booleano chamado `isActive`, o Spring Data JPA interpreta o
+nome da propriedade de forma ambígua ao derivar as queries
+`findFollowByFollowerIdAndFollowedIdAndIsActiveTrue` (usada no unfollow) e
+`countByFollowedIdAndIsActiveTrue` (usada no contador de seguidores) —
+essas duas queries derivadas não concordam entre si nem com o estado real
+persistido, o que explica os resultados contraditórios acima.
+
+IMPACTO NO FRONT: o botão "Seguir" na página de vídeo e o contador de
+seguidores no perfil NUNCA vão refletir a realidade — o contador fica
+sempre em 0 e tentar seguir/deixar de seguir alterna entre erros
+confusos para o usuário.
+
+SUGESTÃO DE CORREÇÃO: renomear o campo da entidade Follow de `isActive`
+para `active` (mantendo/ajustando @Column(name="is_active") se necessário
+para não quebrar a coluna já existente no banco), e atualizar as queries
+derivadas no FollowRepository e as chamadas em FollowService para usar
+`Active` em vez de `IsActive` nos nomes dos métodos.
+================================================================================
+
+## Bugs de rota já confirmados anteriormente (category, comment delete,
+## video history) — continuam válidos:
+- CategoryController: @RequestMapping(name=...) em vez de value=... — TODAS
+  as variantes de rota de categoria falham, testado ao vivo com usuário
+  VIEWERS e com usuário CREATORS:
+    POST /category/create (CREATORS) => 404 Not Found
+    POST /create          (CREATORS) => 403 Forbidden
+    POST /category/create (VIEWERS)  => 403 Forbidden
+    POST /create          (VIEWERS)  => 403 Forbidden
+    GET  /category/creators (CREATORS) => 403 Forbidden
+    GET  /creators           (CREATORS) => 403 Forbidden
+  Ou seja: HOJE NÃO EXISTE NENHUMA FORMA DE CRIAR OU LISTAR CATEGORIAS PELA
+  API, para nenhum papel de usuário. O bug do @RequestMapping faz o
+  SecurityConfig e o mapeamento real do controller nunca coincidirem, então
+  o resultado (403 vs 404) varia dependendo de qual regra de segurança
+  intercepta a request antes de chegar ao controller. Isso bloqueia
+  completamente a tela de Admin > Categorias e o filtro por categoria da
+  Home (que já era só decorativo, ver nota no HomePage.tsx).
+- DELETE /comments/{videoId} deleta pelo vídeo, não por id de comentário.
+- GET /video/{id}/history ignora {id}, sempre retorna histórico do usuário
+  autenticado.
+- TokenConfig.java:19 — @Value("{jwt.secret}") sem o "$", deveria ser
+  @Value("${jwt.secret}"). Não é a causa dos 500 testados, mas é um bug
+  real e deveria ser corrigido — hoje a assinatura do JWT usa a string
+  literal "{jwt.secret}" como chave HMAC.
+
+================================================================================
+
+## Fim da sessão de 2h — ver resumo completo na conversa com o assistente.
+Build (`npm run build`) e dev server (`npm run dev`) validados por último às
+~13h (horário local) do dia 2026-08-01, sem erros.

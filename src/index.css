@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Archivo", "Segoe UI", sans-serif;
+  --font-body: "Manrope", "Segoe UI", sans-serif;
+
+  /* Brand — warm amber-coral, distinct from the generic AI purple/blue.
+     Fixed across themes: an action color should stay recognizable. */
+  --color-brand-50: #fff4ea;
+  --color-brand-100: #ffe4c7;
+  --color-brand-200: #ffc78a;
+  --color-brand-300: #ffa04e;
+  --color-brand-400: #fb8124;
+  --color-brand-500: #ef6511;
+  --color-brand-600: #cc4d0a;
+  --color-brand-700: #a3390a;
+  --color-brand-800: #832e0f;
+  --color-brand-900: #6b270f;
+
+  --color-success-400: #4ade80;
+  --color-success-500: #22b562;
+  --color-success-600: #17924e;
+
+  --color-danger-400: #f87171;
+  --color-danger-500: #e23f3f;
+  --color-danger-600: #b52a2a;
+
+  --shadow-elevated: 0 12px 32px -8px rgb(0 0 0 / 0.45);
+
+  /* Surface — semantic neutral scale, values swapped per theme below.
+     Every component uses these same class names (bg-surface-100,
+     text-surface-900, ...) in both themes instead of a separate light
+     palette, so light/dark actually reflow instead of just the <body>. */
+  --color-surface-0: var(--surface-0);
+  --color-surface-50: var(--surface-50);
+  --color-surface-100: var(--surface-100);
+  --color-surface-200: var(--surface-200);
+  --color-surface-300: var(--surface-300);
+  --color-surface-400: var(--surface-400);
+  --color-surface-500: var(--surface-500);
+  --color-surface-600: var(--surface-600);
+  --color-surface-700: var(--surface-700);
+  --color-surface-800: var(--surface-800);
+  --color-surface-900: var(--surface-900);
+}
+
+:root {
+  color-scheme: dark;
+
+  --surface-0: #0b0b0d;
+  --surface-50: #121215;
+  --surface-100: #17171b;
+  --surface-200: #1f2024;
+  --surface-300: #292a30;
+  --surface-400: #3a3b42;
+  --surface-500: #55565f;
+  --surface-600: #7c7d87;
+  --surface-700: #a4a5ad;
+  --surface-800: #cfd0d5;
+  --surface-900: #f4f4f5;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --surface-0: #f9f8f6;
+  --surface-50: #f1f0ed;
+  --surface-100: #ffffff;
+  --surface-200: #ece9e4;
+  --surface-300: #d5d3cd;
+  --surface-400: #b7b4ac;
+  --surface-500: #8f8c85;
+  --surface-600: #6b6862;
+  --surface-700: #4d4a45;
+  --surface-800: #2a2825;
+  --surface-900: #16140f;
+}
+
+html,
+body {
+  font-family: var(--font-body);
+}
+
+body {
+  @apply bg-surface-0 text-surface-800 antialiased;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+* {
+  scrollbar-color: var(--color-surface-400) transparent;
+}
+
+::selection {
+  background: var(--color-brand-500);
+  color: white;
+}
+
+@layer utilities {
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  @apply bg-surface-200;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.06), transparent);
+  animation: shimmer 1.6s infinite;
+}
+
+:root[data-theme='light'] .skeleton::after {
+  background: linear-gradient(90deg, transparent, rgb(0 0 0 / 0.04), transparent);
+}
