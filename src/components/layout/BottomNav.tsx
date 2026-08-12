@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn'
 
 const itemClass =
   'flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium text-surface-600 transition-colors duration-150'
-const activeClass = 'text-brand-400'
+const activeClass = 'text-brand-link'
 
 export function BottomNav() {
   const auth = useAuth()

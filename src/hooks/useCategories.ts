@@ -1,14 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { mockApi } from '@/mocks/api'
+import { categoryApi } from '@/api/services'
+import type { CategoryRequest } from '@/api/types'
+import { useAuth } from '@/context/AuthContext'
 
+/** GET /creators (o path real das categorias, ver services.ts). */
 export function useCategories() {
-  return useQuery({ queryKey: ['categories'], queryFn: () => mockApi.listCategories() })
+  const { isAuthenticated, isReady } = useAuth()
+  return useQuery({
+    queryKey: ['categories'],
+    queryFn: () => categoryApi.list(),
+    enabled: isReady && isAuthenticated,
+    staleTime: 5 * 60_000, // muda pouco
+  })
 }
 
 export function useCreateCategory() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (name: string) => mockApi.createCategory(name),
+    mutationFn: (body: CategoryRequest) => categoryApi.create(body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
+  })
+}
+
+export function useUpdateCategory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ name, body }: { name: string; body: CategoryRequest }) =>
+      categoryApi.update(name, body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
   })
 }
@@ -16,7 +34,7 @@ export function useCreateCategory() {
 export function useDeleteCategory() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (name: string) => mockApi.deleteCategory(name),
+    mutationFn: (name: string) => categoryApi.remove(name),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
   })
 }

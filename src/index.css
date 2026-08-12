@@ -4,19 +4,36 @@
   --font-display: "Archivo", "Segoe UI", sans-serif;
   --font-body: "Manrope", "Segoe UI", sans-serif;
 
-  /* Brand — warm amber-coral, distinct from the generic AI purple/blue.
-     Fixed across themes: an action color should stay recognizable. */
-  --color-brand-50: #fff4ea;
-  --color-brand-100: #ffe4c7;
-  --color-brand-200: #ffc78a;
-  --color-brand-300: #ffa04e;
-  --color-brand-400: #fb8124;
-  --color-brand-500: #ef6511;
-  --color-brand-600: #cc4d0a;
-  --color-brand-700: #a3390a;
-  --color-brand-800: #832e0f;
-  --color-brand-900: #6b270f;
+  /* Brand — azul-elétrico. Fixo entre temas: uma cor de ação precisa
+     continuar reconhecível.
+     Papel de cada degrau (não são intercambiáveis — foi medido):
+       300 → texto/link sobre fundo escuro (8.68:1)
+       400 → hover de botão (mais claro que o repouso)
+       500 → repouso de botão, com texto branco em cima (4.84:1)
+       600 → active/pressionado, e texto de link no tema claro (6.39:1) */
+  --color-brand-50: #e8f2ff;
+  --color-brand-100: #cbe3ff;
+  --color-brand-200: #9bcaff;
+  --color-brand-300: #63b3ff;
+  --color-brand-400: #2a90f5;
+  --color-brand-500: #0d6fdd;
+  --color-brand-600: #0a58b4;
+  --color-brand-700: #08458d;
+  --color-brand-800: #063266;
+  --color-brand-900: #042142;
 
+  /* Tom da marca legível como TEXTO em qualquer tema: no escuro precisa ser
+     claro (300), no claro precisa ser escuro (600). Um valor fixo falharia
+     contraste num dos dois. Use para links; `brand-500` é para preenchimento. */
+  --color-brand-link: var(--brand-link);
+
+  /* Accent — verde-menta, complementar ao azul. Só para marcações cirúrgicas
+     (o ponto do logo, um selo de estado). Nunca em botão: o azul é a ação, e
+     dois tons disputando o mesmo papel confunde o que é clicável. */
+  --color-accent-ink: var(--accent-ink);
+
+  /* Success/danger são semânticos e independentes da marca. Success ficou no
+     verde-folha (não menta) para não ser confundido com o accent. */
   --color-success-400: #4ade80;
   --color-success-500: #22b562;
   --color-success-600: #17924e;
@@ -47,33 +64,43 @@
 :root {
   color-scheme: dark;
 
-  --surface-0: #0b0b0d;
-  --surface-50: #121215;
-  --surface-100: #17171b;
-  --surface-200: #1f2024;
-  --surface-300: #292a30;
-  --surface-400: #3a3b42;
-  --surface-500: #55565f;
-  --surface-600: #7c7d87;
-  --surface-700: #a4a5ad;
-  --surface-800: #cfd0d5;
-  --surface-900: #f4f4f5;
+  /* Neutros com viés azul-ardósia (não cinza puro — escolhido para conversar
+     com o brand, sem virar "tudo azul"). 600 é o texto secundário: foi medido
+     em 5.25:1 sobre o surface-0, então não escurecer. */
+  --surface-0: #0b0e12;
+  --surface-50: #111620;
+  --surface-100: #161c27;
+  --surface-200: #1f2634;
+  --surface-300: #293142;
+  --surface-400: #3a465c;
+  --surface-500: #57677d;
+  --surface-600: #75879c;
+  --surface-700: #97a7b8;
+  --surface-800: #d0d8e0;
+  --surface-900: #edf1f5;
+
+  --brand-link: #63b3ff; /* brand-300: 8.68:1 no fundo escuro */
+  --accent-ink: #4de3b4; /* menta: 11.94:1 no fundo escuro */
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --surface-0: #f9f8f6;
-  --surface-50: #f1f0ed;
+  /* Cinza-azulado muito claro (não branco puro), mesmo raciocínio de viés. */
+  --surface-0: #f6f7f9;
+  --surface-50: #eef1f5;
   --surface-100: #ffffff;
-  --surface-200: #ece9e4;
-  --surface-300: #d5d3cd;
-  --surface-400: #b7b4ac;
-  --surface-500: #8f8c85;
-  --surface-600: #6b6862;
-  --surface-700: #4d4a45;
-  --surface-800: #2a2825;
-  --surface-900: #16140f;
+  --surface-200: #e4e8ee;
+  --surface-300: #ccd3dc;
+  --surface-400: #a3aeba;
+  --surface-500: #7a8695;
+  --surface-600: #5b6673;
+  --surface-700: #414a55;
+  --surface-800: #1d232b;
+  --surface-900: #10151b;
+
+  --brand-link: #0a58b4; /* brand-600: 6.39:1 no fundo claro */
+  --accent-ink: #0f7a5c; /* menta escurecida: 4.95:1 no fundo claro */
 }
 
 html,

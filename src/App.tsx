@@ -1,5 +1,11 @@
 import { Routes, Route } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
+import {
+  RedirectIfAuthenticated,
+  RequireAdmin,
+  RequireAuth,
+  RequireCreator,
+} from '@/components/auth/RouteGuards'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { HomePage } from '@/pages/HomePage'
@@ -8,21 +14,54 @@ import { UploadPage } from '@/pages/UploadPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { AdminPage } from '@/pages/AdminPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { ForbiddenPage } from '@/pages/ForbiddenPage'
 
-// Protótipo: rotas abertas de propósito, para facilitar a navegação e a
-// avaliação visual. Os guards por papel voltam na integração real.
+/** Toda rota privada passa por um guard.
+ *
+ *  Acessar a URL direto (colando no navegador) cai na mesma checagem: sem
+ *  sessão vai para /login guardando o destino; com sessão mas sem o papel
+ *  necessário vai para /403 com explicação. Os guards espelham as regras do
+ *  SecurityConfig do backend — a autorização real continua sendo do servidor.
+ */
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+      <Route
+        path="/login"
+        element={
+          <RedirectIfAuthenticated>
+            <LoginPage />
+          </RedirectIfAuthenticated>
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          <RedirectIfAuthenticated>
+            <RegisterPage />
+          </RedirectIfAuthenticated>
+        }
+      />
 
       <Route element={<AppLayout withSearch />}>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/videos/:id" element={<VideoPage />} />
-        <Route path="/upload" element={<UploadPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/admin" element={<AdminPage />} />
+        {/* Home exige sessão: GET /video hoje falha sem token. */}
+        <Route element={<RequireAuth />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/videos/:id" element={<VideoPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+        </Route>
+
+        {/* Espelha POST /video/upload -> hasAnyRole("CREATORS","ADMIN") */}
+        <Route element={<RequireCreator />}>
+          <Route path="/upload" element={<UploadPage />} />
+        </Route>
+
+        {/* Espelha GET /auth/users -> hasRole("ADMIN") */}
+        <Route element={<RequireAdmin />}>
+          <Route path="/admin" element={<AdminPage />} />
+        </Route>
+
+        <Route path="/403" element={<ForbiddenPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

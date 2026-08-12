@@ -13,7 +13,7 @@ export function Avatar({ name, className }: { name: string; className?: string }
   return (
     <div
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-full bg-brand-500/20 font-display font-semibold text-brand-400',
+        'flex shrink-0 items-center justify-center rounded-full bg-brand-500/20 font-display font-semibold text-brand-link',
         className ?? 'h-9 w-9 text-sm',
       )}
     >

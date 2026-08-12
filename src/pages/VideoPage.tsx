@@ -1,8 +1,6 @@
-import { useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { ThumbsUp, ThumbsDown, Share2, Bookmark, Compass } from 'lucide-react'
+import { Link, useParams } from 'react-router-dom'
+import { Share2, Compass, ServerCrash } from 'lucide-react'
 import { useVideo, useVideos } from '@/hooks/useVideos'
-import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { VideoPlayer } from '@/components/video/VideoPlayer'
 import { VideoCard } from '@/components/video/VideoCard'
@@ -11,22 +9,51 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { mockApi } from '@/mocks/api'
-import { creatorById } from '@/mocks/data'
-import { formatCompact, formatViews, formatRelativeDate } from '@/lib/format'
-import { cn } from '@/lib/cn'
+import { Badge } from '@/components/ui/Badge'
+import { toErrorMessage } from '@/api/client'
+import { safeExternalUrl } from '@/lib/validation'
+import { formatViews, formatRelativeDate } from '@/lib/format'
+import { STATUS_LABEL } from '@/lib/video'
 
 export function VideoPage() {
   const { id } = useParams<{ id: string }>()
   const videoId = Number(id)
-  const { data: video, isLoading, isError } = useVideo(videoId)
+  const isValidId = Number.isInteger(videoId) && videoId > 0
+
+  const { data: video, isLoading, isError, error } = useVideo(videoId)
   const { data: allVideos } = useVideos()
-  const { isAuthenticated } = useAuth()
   const { showToast } = useToast()
 
-  const [liked, setLiked] = useState(() => mockApi.isVideoLiked(videoId))
-  const [following, setFollowing] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const share = async () => {
+    const url = window.location.href
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: video?.tittle ?? 'Vídeo', url })
+        return
+      }
+      await navigator.clipboard.writeText(url)
+      showToast('Link copiado.', 'success')
+    } catch {
+      // Cancelar o compartilhamento nativo cai aqui; não é erro a reportar.
+    }
+  }
+
+  if (!isValidId) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
+        <EmptyState
+          icon={Compass}
+          title="Endereço inválido"
+          description="O identificador do vídeo não é um número válido."
+          action={
+            <Link to="/">
+              <Button variant="secondary">Voltar ao início</Button>
+            </Link>
+          }
+        />
+      </div>
+    )
+  }
 
   if (isLoading) {
     return (
@@ -35,11 +62,17 @@ export function VideoPage() {
           <div>
             <Skeleton className="aspect-video w-full rounded-xl" />
             <Skeleton className="mt-4 h-7 w-3/4" />
-            <Skeleton className="mt-3 h-16 w-full rounded-xl" />
+            <Skeleton className="mt-3 h-20 w-full rounded-xl" />
           </div>
           <div className="space-y-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full rounded-lg" />
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="flex gap-3">
+                <Skeleton className="aspect-video w-36 rounded-lg" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-2/3" />
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -49,119 +82,94 @@ export function VideoPage() {
 
   if (isError || !video) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-        <EmptyState icon={Compass} title="Vídeo não encontrado" description="Ele pode ter sido removido ou está indisponível." />
+      <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
+        <EmptyState
+          icon={ServerCrash}
+          title="Vídeo não encontrado"
+          description={
+            isError ? toErrorMessage(error) : 'Este vídeo não existe ou não está mais disponível.'
+          }
+          action={
+            <Link to="/">
+              <Button variant="secondary">Voltar ao início</Button>
+            </Link>
+          }
+        />
       </div>
     )
   }
 
-  const creator = creatorById(video.creatorId)
-  const related = (allVideos ?? []).filter((v) => v.id !== video.id).slice(0, 6)
-
-  const requireAuth = (action: () => void) => {
-    if (!isAuthenticated) {
-      showToast('Entre na sua conta para fazer isso.', 'info')
-      return
-    }
-    action()
-  }
+  const poster = safeExternalUrl(video.thumbnailUrl)
+  // O id do vídeo aberto é o :id da própria URL. Aqui só excluímos ele da
+  // lista de relacionados, comparando pelo id normalizado (ver lib/video.ts).
+  const related = (allVideos ?? []).filter((item) => item.id !== videoId).slice(0, 6)
 
   return (
-    <div className="mx-auto max-w-[1600px] px-4 pb-12 pt-5 sm:px-6">
+    <div className="mx-auto max-w-[1600px] px-4 pb-16 pt-4 sm:px-6 sm:pt-6">
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
-          <VideoPlayer poster={video.thumbnail} />
+          <VideoPlayer src={safeExternalUrl(video.videoUrl)} poster={poster} title={video.tittle} />
 
-          <h1 className="mt-4 font-display text-xl font-bold leading-snug text-surface-900 sm:text-2xl">
-            {video.titulo}
+          <h1 className="mt-4 font-display text-lg font-extrabold leading-snug tracking-tight text-surface-900 sm:text-2xl">
+            {video.tittle}
           </h1>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Avatar name={creator.name} className="h-10 w-10 text-sm" />
-              <div>
-                <p className="font-display text-sm font-semibold text-surface-900">{creator.name}</p>
-                <p className="text-xs text-surface-600">{formatCompact(creator.followers)} seguidores</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[13px] text-surface-600 sm:text-sm">
+            <span className="tabular-nums">{formatViews(video.views)}</span>
+            <span aria-hidden="true">·</span>
+            <span>{formatRelativeDate(video.uploadDate)}</span>
+            {video.status !== 'PUBLISHED' && (
+              <Badge tone="neutral">{STATUS_LABEL[video.status] ?? video.status}</Badge>
+            )}
+          </div>
+
+          {/* Ações: criador à esquerda, compartilhar à direita.
+              Curtir/não curtir sai daqui enquanto a avaliação está em standby
+              (feature a implementar; ver PENDENCIAS.md). */}
+          <div className="mt-4 flex flex-col gap-3 border-y border-surface-200 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <Avatar name={video.creatorName} className="h-10 w-10 text-sm" />
+              <div className="min-w-0">
+                <p className="truncate font-display text-sm font-semibold text-surface-900">
+                  {video.creatorName}
+                </p>
+                <p className="text-xs text-surface-600">Criador</p>
               </div>
-              <Button
-                variant={following ? 'secondary' : 'primary'}
-                size="sm"
-                className="ml-2"
-                onClick={() =>
-                  requireAuth(() => {
-                    setFollowing((v) => !v)
-                    showToast(following ? 'Deixou de seguir.' : `Seguindo ${creator.name}.`, 'success')
-                  })
-                }
-              >
-                {following ? 'Seguindo' : 'Seguir'}
-              </Button>
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="flex overflow-hidden rounded-full bg-surface-200">
-                <button
-                  type="button"
-                  onClick={() => requireAuth(() => setLiked((v) => !v))}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors hover:bg-surface-300',
-                    liked ? 'text-brand-400' : 'text-surface-800',
-                  )}
-                >
-                  <ThumbsUp size={16} fill={liked ? 'currentColor' : 'none'} />
-                  {formatCompact(1240 + (liked ? 1 : 0))}
-                </button>
-                <span className="my-2 w-px bg-surface-400/50" />
-                <button
-                  type="button"
-                  onClick={() => requireAuth(() => showToast('Feedback registrado.', 'success'))}
-                  className="px-4 py-2 text-surface-800 transition-colors hover:bg-surface-300"
-                  aria-label="Não gostei"
-                >
-                  <ThumbsDown size={16} />
-                </button>
-              </div>
-
-              <Button
-                variant="secondary"
-                size="sm"
-                className="rounded-full"
-                onClick={() => showToast('Link copiado para a área de transferência.', 'success')}
-              >
-                <Share2 size={16} />
-                Compartilhar
-              </Button>
-
-              <Button
-                variant="secondary"
-                size="sm"
-                className="rounded-full"
-                onClick={() => requireAuth(() => { setSaved((v) => !v); showToast(saved ? 'Removido dos salvos.' : 'Salvo.', 'success') })}
-              >
-                <Bookmark size={16} fill={saved ? 'currentColor' : 'none'} />
+              <Button variant="secondary" size="sm" onClick={share} className="rounded-full">
+                <Share2 size={15} />
+                <span className="hidden sm:inline">Compartilhar</span>
               </Button>
             </div>
           </div>
 
-          <div className="mt-4 rounded-xl bg-surface-100 p-4">
-            <p className="text-sm font-semibold text-surface-900">
-              {formatViews(video.views)} · {formatRelativeDate(video.publishedAt)} · {video.category}
-            </p>
-            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-surface-800">{video.sinopse}</p>
-          </div>
+          {video.description && (
+            <div className="mt-4 rounded-xl bg-surface-100 p-4">
+              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-surface-800">
+                {video.description}
+              </p>
+            </div>
+          )}
 
-          <CommentSection videoId={video.id} />
+          <CommentSection videoId={videoId} />
         </div>
 
+        {/* Relacionados */}
         <aside className="min-w-0">
-          <h2 className="mb-4 font-display text-sm font-bold uppercase tracking-wide text-surface-600">
-            A seguir
+          <h2 className="mb-4 font-display text-base font-bold text-surface-900">
+            Outros vídeos
           </h2>
-          <div className="space-y-3">
-            {related.map((item) => (
-              <VideoCard key={item.id} video={item} compact />
-            ))}
-          </div>
+          {related.length === 0 ? (
+            <p className="text-sm text-surface-600">Nenhum outro vídeo por aqui ainda.</p>
+          ) : (
+            <div className="space-y-4">
+              {related.map((item) => (
+                <VideoCard key={item.key} video={item} compact />
+              ))}
+            </div>
+          )}
         </aside>
       </div>
     </div>
