@@ -73,6 +73,34 @@ export interface UserResponse {
   registrationDate: string
 }
 
+/** GET /auth/user/{id} — perfil PÚBLICO de outro usuário.
+ *
+ *  Requer sessão: SecurityConfig exige hasAnyRole("CREATORS","VIEWERS").
+ *
+ *  É um DTO MENOR que UserResponse, não o mesmo objeto: não traz `id`, `email`,
+ *  `userAuth`, `profilePhoto` nem `linkWebsite`. Isso é intencional — é o
+ *  recorte que pode ser exibido a terceiros (e-mail de outra pessoa não é
+ *  informação pública). Por isso tem tipo próprio em vez de
+ *  `Partial<UserResponse>`: o que não vem aqui não existe para a tela pública.
+ *
+ *  ATENÇÃO ao nome do id: aqui é `userId`, enquanto em UserResponse (/auth/me)
+ *  o mesmo dado se chama `id`. São records diferentes no backend — não unificar
+ *  os dois tipos por causa disso. */
+export interface PublicUserResponse {
+  /** Id do próprio usuário retornado (confirma quem é o dono do perfil). */
+  userId: number
+  name: string
+  surname: string
+  typeAccount: UserTypeAccount
+  bio: string
+  state: string
+  country: string
+  linkInstagram: string
+  linkYoutube: string
+  /** ISO sem timezone (ex.: "2026-01-15T09:00:00"). */
+  registrationDate: string
+}
+
 /** GET /video, GET /video/{id}, GET /video/users/videos.
  *
  *  O nome do campo de id JÁ MUDOU DUAS VEZES no backend: era ausente, virou
@@ -95,6 +123,16 @@ export interface VideoResponse {
   thumbnailUrl: string
   videoUrl?: string
   creatorName: string
+  /** Id do CRIADOR do vídeo (não do vídeo!), para linkar o nome ao perfil
+   *  público em /users/{userId}. Devolvido desde 2026-08-16.
+   *
+   *  Segue opcional para não quebrar contra um backend mais antigo: quando vem
+   *  undefined, a UI mostra o nome como texto simples em vez de um link que
+   *  daria 404 — ver `profilePath` em lib/video.ts.
+   *
+   *  Cuidado para não confundir com `videId`, que é o id do vídeo. Os dois são
+   *  números e ficam lado a lado; trocar um pelo outro leva ao perfil errado. */
+  userId?: number
   language: string
   uploadDate: string
   views: number
@@ -122,8 +160,22 @@ export interface CategoryRequest {
 export type CategoryResponse = CategoryRequest
 
 export interface CommentResponse {
-  id: number
+  /** Id do PRÓPRIO comentário — alvo de POST/DELETE /commentLikes/{id}.
+   *
+   *  Chamava-se `id` até 2026-08-16. O nome novo é mais claro ao lado de
+   *  `userId` (autor), mas cuidado: os dois são números e ficam colados no
+   *  record, e trocar um pelo outro curte o comentário errado sem dar erro. */
+  commentId: number
   text: string
+  /** Nome e sobrenome do autor do comentário, em campos separados. Opcionais
+   *  porque comentários antigos, criados antes de o backend passar a devolver o
+   *  autor, podem vir sem eles. */
+  nameUser?: string
+  surnameUser?: string
+  /** Id do AUTOR do comentário (não do comentário — esse é `id`), para linkar
+   *  o nome ao perfil público. Devolvido desde 2026-08-16; opcional pela mesma
+   *  razão de `VideoResponse.userId`. */
+  userId?: number
   dataComment: string
   version: number
   likes: number

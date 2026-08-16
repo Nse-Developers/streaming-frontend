@@ -6,6 +6,7 @@ import type {
   CreatedResponse,
   DeletedResponse,
   NumberOfFollowersResponse,
+  PublicUserResponse,
   UserLoginRequest,
   UserLoginResponse,
   UserRegisterRequest,
@@ -57,6 +58,27 @@ export const authApi = {
       // A API responde 409 "User Already Exist" (em inglês) neste caso.
       if (error instanceof ApiError && error.status === 409) {
         throw new ApiError('Já existe uma conta com este e-mail.', 409)
+      }
+      throw error
+    }
+  },
+
+  /** GET /auth/user/{id} — perfil público de outro usuário.
+   *
+   *  Caminho no SINGULAR (`/auth/user/`), diferente de `/auth/users` (plural,
+   *  só ADMIN). São rotas distintas com permissões distintas: esta exige apenas
+   *  sessão (CREATORS ou VIEWERS), e é a única que um espectador pode usar para
+   *  ver o perfil de alguém.
+   *
+   *  O 404 vira mensagem em português porque cai direto na tela de perfil: a
+   *  mensagem crua do backend apareceria para o usuário final. */
+  async getUserById(id: number) {
+    try {
+      const { data } = await http.get<PublicUserResponse>(`/auth/user/${id}`)
+      return data
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        throw new ApiError('Este perfil não existe ou foi removido.', 404)
       }
       throw error
     }
