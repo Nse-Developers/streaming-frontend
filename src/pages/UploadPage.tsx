@@ -144,7 +144,7 @@ export function UploadPage() {
               accept={ACCEPTED_VIDEO_TYPES.join(',')}
               file={file}
               onChange={pickVideo}
-              hint="MP4, WebM, MOV ou MKV — até 15 GB"
+              hint="MP4, WebM, MOV ou MKV — até 2 GB"
               icon={<Film size={26} className="text-surface-600" />}
             />
             {file && !fileError && (

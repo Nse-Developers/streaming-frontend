@@ -151,7 +151,7 @@ export type CategoryValues = z.infer<typeof categorySchema>
 
 /* --------------------------------------------------------------- upload */
 
-export const MAX_VIDEO_BYTES = 15 * 1024 * 1024 * 1024 // 15 GB (backend)
+export const MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024 // 2 GB (backend)
 export const MAX_THUMB_BYTES = 15 * 1024 * 1024 // 15 MB (backend)
 
 export const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska']
@@ -178,7 +178,7 @@ export type UploadValues = z.infer<typeof uploadSchema>
 export function validateVideoFile(file: File | null): string | null {
   if (!file) return 'Selecione o arquivo de vídeo.'
   if (file.size === 0) return 'O arquivo está vazio.'
-  if (file.size > MAX_VIDEO_BYTES) return 'O vídeo passa de 15 GB.'
+  if (file.size > MAX_VIDEO_BYTES) return 'O vídeo passa de 2 GB.'
   if (file.type && !ACCEPTED_VIDEO_TYPES.includes(file.type)) {
     return 'Formato não aceito. Use MP4, WebM, MOV ou MKV.'
   }
