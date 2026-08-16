@@ -163,3 +163,53 @@ body {
 :root[data-theme='light'] .skeleton::after {
   background: linear-gradient(90deg, transparent, rgb(0 0 0 / 0.04), transparent);
 }
+
+/* Slider de volume do player.
+   O <input type="range"> nativo é cinza-sistema e não aceita estilo pelas
+   classes do Tailwind: trilho e polegar só existem em pseudo-elementos, que
+   precisam ser escritos para WebKit e Firefox separadamente.
+   Cores fixas em branco (não tokens de tema) porque isto vive SEMPRE sobre o
+   vídeo, que é preto nos dois temas — seguir o tema claro deixaria o controle
+   invisível. */
+/* O fundo (trilho + parte preenchida) vem de um gradiente inline no elemento,
+   definido no VideoPlayer — é o único jeito de o "já preenchido" ficar igual
+   no Chrome e no Firefox. Os trilhos nativos ficam transparentes para deixar
+   esse gradiente aparecer. */
+.volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 9999px;
+  background-color: transparent;
+  background-repeat: no-repeat;
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.volume-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 12px;
+  width: 12px;
+  border-radius: 9999px;
+  background: #fff;
+  /* Centraliza o polegar no trilho: (altura do trilho - altura do polegar) / 2 */
+  margin-top: -4px;
+}
+
+.volume-slider::-moz-range-thumb {
+  height: 12px;
+  width: 12px;
+  border: none;
+  border-radius: 9999px;
+  background: #fff;
+}
