@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/Button'
 import { Skeleton, VideoCardSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { VideoCard } from '@/components/video/VideoCard'
+import { FollowButton } from '@/components/user/FollowButton'
+import { FollowerCount } from '@/components/user/FollowerCount'
 import { usePublicUser } from '@/hooks/useUsers'
 import { useVideos } from '@/hooks/useVideos'
 import { useAuth } from '@/context/AuthContext'
@@ -105,7 +107,7 @@ export function UserProfilePage() {
             {fullName}
           </h1>
 
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
             <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/12 px-2.5 py-1 text-[11px] font-semibold text-brand-link">
               {ACCOUNT_LABEL[user.typeAccount] ?? user.typeAccount}
             </span>
@@ -114,17 +116,21 @@ export function UserProfilePage() {
                 Você
               </span>
             )}
+            <FollowerCount userId={profileId} className="text-sm text-surface-600" />
           </div>
         </div>
 
-        {/* Atalho para a tela de edição quando o perfil aberto é o próprio —
-            sem ele o usuário veria a versão pública sem caminho para editar. */}
-        {isSelf && (
+        {/* No próprio perfil, atalho para editar; no de outra pessoa, seguir.
+            Os dois nunca aparecem juntos — o FollowButton se esconde sozinho
+            quando o alvo é o usuário logado. */}
+        {isSelf ? (
           <Link to="/profile" className="w-full sm:w-auto">
             <Button variant="secondary" className="w-full sm:w-auto">
               Editar meu perfil
             </Button>
           </Link>
+        ) : (
+          <FollowButton userId={profileId} name={user.name} className="w-full sm:w-auto" />
         )}
       </header>
 

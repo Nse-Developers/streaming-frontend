@@ -7,6 +7,8 @@ import { VideoCard } from '@/components/video/VideoCard'
 import { CommentSection } from '@/components/video/CommentSection'
 import { Avatar } from '@/components/ui/Avatar'
 import { UserLink, UserAvatarLink } from '@/components/user/UserLink'
+import { FollowButton } from '@/components/user/FollowButton'
+import { FollowerCount } from '@/components/user/FollowerCount'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -138,11 +140,22 @@ export function VideoPage() {
                   name={video.creatorName}
                   className="block truncate font-display text-sm font-semibold text-surface-900"
                 />
-                <p className="text-xs text-surface-600">Criador</p>
+                <p className="text-xs text-surface-600">
+                  Criador
+                  {video.userId != null && <FollowerCount userId={video.userId} inline />}
+                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
+              {video.userId != null && (
+                <FollowButton
+                  userId={video.userId}
+                  name={video.creatorName}
+                  size="sm"
+                  className="rounded-full"
+                />
+              )}
               <Button variant="secondary" size="sm" onClick={share} className="rounded-full">
                 <Share2 size={15} />
                 <span className="hidden sm:inline">Compartilhar</span>

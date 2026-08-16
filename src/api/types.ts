@@ -185,6 +185,22 @@ export interface NumberOfFollowersResponse {
   followers: number
 }
 
+/** GET /follow/users/{followerId}/following — quem o usuário SEGUE.
+ *  Cada item é uma aresta da relação.
+ *
+ *  É o que permite o botão "Seguir/Seguindo" saber seu estado inicial: sem esta
+ *  rota o front não teria como perguntar "eu sigo fulano?" e o botão voltaria a
+ *  "Seguir" a cada F5, mesmo para quem já é seguido.
+ *
+ *  A lista já vem filtrada por `userAlreadyFollow = true` no backend, então
+ *  quem foi deixado de seguir não aparece — não é preciso filtrar aqui. */
+export interface FollowResponse {
+  /** Quem segue — é sempre o usuário do path. */
+  followerId: number
+  /** Quem é seguido. É este que interessa: são os perfis com "Seguindo". */
+  followedId: number
+}
+
 export interface CreatedResponse {
   status: number
   action: string
