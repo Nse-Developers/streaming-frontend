@@ -6,6 +6,9 @@ import { VideoPlayer } from '@/components/video/VideoPlayer'
 import { VideoCard } from '@/components/video/VideoCard'
 import { CommentSection } from '@/components/video/CommentSection'
 import { Avatar } from '@/components/ui/Avatar'
+import { UserLink, UserAvatarLink } from '@/components/user/UserLink'
+import { FollowButton } from '@/components/user/FollowButton'
+import { FollowerCount } from '@/components/user/FollowerCount'
 import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -128,16 +131,31 @@ export function VideoPage() {
               (feature a implementar; ver PENDENCIAS.md). */}
           <div className="mt-4 flex flex-col gap-3 border-y border-surface-200 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-3">
-              <Avatar name={video.creatorName} className="h-10 w-10 text-sm" />
+              <UserAvatarLink userId={video.userId} name={video.creatorName}>
+                <Avatar name={video.creatorName} className="h-10 w-10 text-sm" />
+              </UserAvatarLink>
               <div className="min-w-0">
-                <p className="truncate font-display text-sm font-semibold text-surface-900">
-                  {video.creatorName}
+                <UserLink
+                  userId={video.userId}
+                  name={video.creatorName}
+                  className="block truncate font-display text-sm font-semibold text-surface-900"
+                />
+                <p className="text-xs text-surface-600">
+                  Criador
+                  {video.userId != null && <FollowerCount userId={video.userId} inline />}
                 </p>
-                <p className="text-xs text-surface-600">Criador</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
+              {video.userId != null && (
+                <FollowButton
+                  userId={video.userId}
+                  name={video.creatorName}
+                  size="sm"
+                  className="rounded-full"
+                />
+              )}
               <Button variant="secondary" size="sm" onClick={share} className="rounded-full">
                 <Share2 size={15} />
                 <span className="hidden sm:inline">Compartilhar</span>

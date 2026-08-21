@@ -5,7 +5,9 @@ import type {
   CommentResponse,
   CreatedResponse,
   DeletedResponse,
+  FollowResponse,
   NumberOfFollowersResponse,
+  PublicUserResponse,
   UserLoginRequest,
   UserLoginResponse,
   UserRegisterRequest,
@@ -57,6 +59,27 @@ export const authApi = {
       // A API responde 409 "User Already Exist" (em inglês) neste caso.
       if (error instanceof ApiError && error.status === 409) {
         throw new ApiError('Já existe uma conta com este e-mail.', 409)
+      }
+      throw error
+    }
+  },
+
+  /** GET /auth/user/{id} — perfil público de outro usuário.
+   *
+   *  Caminho no SINGULAR (`/auth/user/`), diferente de `/auth/users` (plural,
+   *  só ADMIN). São rotas distintas com permissões distintas: esta exige apenas
+   *  sessão (CREATORS ou VIEWERS), e é a única que um espectador pode usar para
+   *  ver o perfil de alguém.
+   *
+   *  O 404 vira mensagem em português porque cai direto na tela de perfil: a
+   *  mensagem crua do backend apareceria para o usuário final. */
+  async getUserById(id: number) {
+    try {
+      const { data } = await http.get<PublicUserResponse>(`/auth/user/${id}`)
+      return data
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        throw new ApiError('Este perfil não existe ou foi removido.', 404)
       }
       throw error
     }
@@ -210,9 +233,23 @@ export const commentLikeApi = {
 /* --------------------------------------------------------------- follow */
 
 export const followApi = {
+  /** Quantos seguidores este usuário tem.
+   *
+   *  O contador é o path SEM sufixo (`/follow/users/{id}`); `/following` é a
+   *  lista de quem ele segue. Trocar um pelo outro não dá erro de tipo — só
+   *  devolve a coisa errada (um objeto onde se espera array). */
   async followers(userId: number) {
-    const { data } = await http.get<NumberOfFollowersResponse>(`/follow/users/${userId}/followers`)
+    const { data } = await http.get<NumberOfFollowersResponse>(`/follow/users/${userId}`)
     return data.followers
+  },
+
+  /** Quem este usuário SEGUE.
+   *
+   *  Devolve só os `followedId`, que é o que a UI usa: o conjunto de perfis em
+   *  que o botão deve mostrar "Seguindo". */
+  async following(userId: number) {
+    const { data } = await http.get<FollowResponse[]>(`/follow/users/${userId}/following`)
+    return (data ?? []).map((item) => item.followedId)
   },
 
   async follow(followedId: number) {

@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ThumbsUp, MessageSquare, ServerCrash } from 'lucide-react'
 import { Avatar } from '@/components/ui/Avatar'
+import { UserLink, UserAvatarLink } from '@/components/user/UserLink'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -143,14 +144,28 @@ export function CommentSection({ videoId }: { videoId: number }) {
       {!isLoading && !isError && comments && comments.length > 0 && (
         <ul className="space-y-6">
           {comments.map((comment) => {
-            const liked = likedIds.has(comment.id)
+            const liked = likedIds.has(comment.commentId)
+            // O backend manda nome e sobrenome separados; o join descarta o que
+            // vier vazio para não sobrar espaço solto nas iniciais do avatar.
+            const authorName = [comment.nameUser, comment.surnameUser]
+              .filter(Boolean)
+              .join(' ')
+              .trim()
             return (
-              <li key={comment.id} className="flex gap-3">
-                {/* A API não devolve o autor do comentário, apenas o texto. */}
-                <Avatar name="?" />
+              <li key={comment.commentId} className="flex gap-3">
+                <UserAvatarLink userId={comment.userId} name={authorName}>
+                  <Avatar name={authorName || '?'} />
+                </UserAvatarLink>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-surface-600">
-                    {formatRelativeDate(comment.dataComment) || 'agora'}
+                  <p className="flex flex-wrap items-center gap-x-2 text-xs text-surface-600">
+                    {authorName && (
+                      <UserLink
+                        userId={comment.userId}
+                        name={authorName}
+                        className="font-medium text-surface-900"
+                      />
+                    )}
+                    <span>{formatRelativeDate(comment.dataComment) || 'agora'}</span>
                   </p>
                   {/* Texto sempre como conteúdo, nunca HTML: React escapa por padrão. */}
                   <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-surface-800">
@@ -159,7 +174,7 @@ export function CommentSection({ videoId }: { videoId: number }) {
                   <button
                     type="button"
                     disabled={!isAuthenticated}
-                    onClick={() => onToggleLike(comment.id)}
+                    onClick={() => onToggleLike(comment.commentId)}
                     className={cn(
                       'mt-2 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium transition-colors focus-ring disabled:cursor-not-allowed disabled:opacity-50',
                       liked

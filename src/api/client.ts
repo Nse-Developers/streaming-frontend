@@ -71,7 +71,7 @@ http.interceptors.response.use(
         new ApiError(
           offline
             ? 'Você está sem conexão. Verifique sua internet.'
-            : 'Não foi possível falar com o servidor. Ele está no ar?',
+            : 'Não foi possível falar com o servidor. Está fora do ar no momento',
           0,
           true,
         ),
