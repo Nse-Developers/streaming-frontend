@@ -86,20 +86,29 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  /* Cinza-azulado muito claro (não branco puro), mesmo raciocínio de viés. */
-  --surface-0: #f6f7f9;
-  --surface-50: #eef1f5;
+  /* Cinza-azulado muito claro (não branco puro), mesmo raciocínio de viés.
+     O viés azul aqui é mais explícito que um cinza neutro: os fundos puxam
+     levemente para o brand, o que faz o azul dos botões e links parecer parte
+     do ambiente em vez de um respingo isolado. Ainda são neutros — a saturação
+     é baixa o bastante para não competir com o conteúdo. */
+  --surface-0: #f2f5fa;
+  --surface-50: #e9eef7;
   --surface-100: #ffffff;
-  --surface-200: #e4e8ee;
-  --surface-300: #ccd3dc;
-  --surface-400: #a3aeba;
-  --surface-500: #7a8695;
-  --surface-600: #5b6673;
-  --surface-700: #414a55;
-  --surface-800: #1d232b;
-  --surface-900: #10151b;
+  --surface-200: #dee6f2;
+  --surface-300: #c4d0e2;
+  --surface-400: #9aa9c0;
+  --surface-500: #71829b;
+  --surface-600: #556478;
+  --surface-700: #3c4859;
+  --surface-800: #1a212c;
+  --surface-900: #0e141d;
 
-  --brand-link: #0a58b4; /* brand-600: 6.39:1 no fundo claro */
+  /* brand-600 (#0a58b4) passava contraste, mas lia como azul-marinho: escuro
+     demais para parecer "a cor da marca". Este é o mesmo tom puxado para o
+     azul-elétrico do brand-500, mantendo folga de contraste: 5.29:1 sobre o
+     surface-0 e 4.96:1 sobre o surface-50 (o fundo mais claro em que ele
+     aparece), ambos acima do mínimo 4.5:1 da WCAG AA para texto. */
+  --brand-link: #0b62cc;
   --accent-ink: #0f7a5c; /* menta escurecida: 4.95:1 no fundo claro */
 }
 
