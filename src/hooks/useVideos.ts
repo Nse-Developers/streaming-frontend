@@ -17,12 +17,17 @@ export function useVideos() {
 
 /** Vídeos do usuário logado num status específico (aba "Meus vídeos"). */
 export function useMyVideos(status: VideoStatus) {
-  const { user, isReady } = useAuth()
+  const { user, isAuthenticated, isReady } = useAuth()
   const email = user?.email
   return useQuery({
     queryKey: ['videos', 'mine', email, status],
     queryFn: async () => toUiVideos(await videoApi.listByUserAndStatus(email!, status)),
-    enabled: isReady && Boolean(email),
+    // `isAuthenticated` junto de `email` (e não só `email`) para acompanhar os
+    // outros hooks: esta query pede DRAFT e PRIVATE, e sem essa checagem ela
+    // seguia buscando vídeos não publicados depois de um 401 já ter derrubado
+    // a sessão — o caminho de erro de rede em refreshUser preserva `user`, e
+    // com ele o `email` continuava truthy.
+    enabled: isReady && isAuthenticated && Boolean(email),
   })
 }
 

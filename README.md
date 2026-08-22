@@ -73,12 +73,61 @@ resultariam em 403, e para falhar de forma explicada em vez de silenciosa.
 - **Validação de formulário** com zod (`lib/validation.ts`): além dos limites de
   tamanho, remove caracteres de controle, aceita apenas URLs `http(s)` (barrando
   `javascript:`/`data:`) e restringe o nome de categoria, que vai na URL.
+- **`safeExternalUrl` exige URL absoluta**: usada antes de qualquer valor da API
+  ir para `src`/`href`. Não resolve mais contra `window.location.origin`, porque
+  com base um caminho relativo (`/x`) virava URL da própria origem e uma URL
+  protocol-relative (`//evil.com/x`) era promovida a `https://evil.com/x` sem
+  aviso. Os quatro pontos de uso recebem sempre URL absoluta.
+- **Visibilidade centralizada** em `isPubliclyVisible`/`publicVideos`
+  (`lib/video.ts`): listagens públicas mostram só `PUBLISHED`. É allowlist — um
+  status novo no backend fica invisível até alguém decidir o contrário, em vez
+  de aparecer sozinho. Antes a regra estava repetida em cada tela, e uma tela
+  nova podia esquecê-la. **O backend continua sendo a autoridade**: se ele
+  enviar rascunho de terceiro no feed, o dado chega ao navegador (oculto na UI,
+  mas presente no JSON) — o filtro definitivo é lá.
 - **Upload**: tipo e tamanho conferidos antes de enviar (o backend revalida o
   conteúdo com Apache Tika).
 - **Sem `dangerouslySetInnerHTML`** em nenhum ponto: todo texto vindo da API é
   renderizado como conteúdo, então o React escapa.
 - **Mensagens de erro** não vazam informação: e-mail inexistente e senha errada
-  produzem a mesma resposta na tela, evitando enumeração de usuários.
+  produzem a mesma resposta na tela, evitando enumeração de usuários. Em **5xx**
+  a mensagem do backend é descartada em favor de um texto fixo: um
+  `ExceptionResponse` de erro não tratado carrega a exceção do Spring, que pode
+  trazer nome de tabela, fragmento de SQL ou host do MinIO. Em 4xx a mensagem é
+  exibida, porque ali ela é de negócio ("categoria já existe").
+- **Cache limpo na troca de sessão**: `login()` e `logout()` chamam
+  `queryClient.clear()`. Sem isso o cache do React Query sobrevivia ao logout
+  (é navegação SPA, sem reload, e o `gcTime` padrão é 5 min) e as chaves sem
+  identidade de usuário — `['videos']`, `['users']`, `['comments', id]` —
+  serviriam ao próximo a entrar no mesmo navegador o que o anterior carregou,
+  incluindo a lista de e-mails que um admin abriu em `/admin`.
+- **`VITE_API_URL` obrigatória no build de produção**: `vite.config.ts` falha o
+  build se ela faltar ou não for `https`. Antes havia um fallback para
+  `http://localhost:8080` que era embutido no bundle; combinado com
+  `withCredentials: true`, um deploy sem a variável fazia o navegador do
+  visitante enviar e-mail e senha do login para qualquer processo escutando
+  naquela porta na máquina **dele**.
+
+## Deploy: headers de segurança
+
+O `dist/` é estático, então estes headers dependem do servidor que o publica —
+não há como defini-los no bundle. Exemplo para nginx (troque os placeholders
+pelos hosts reais da API e do MinIO):
+
+```nginx
+add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://MINIO_HOST; media-src 'self' https://MINIO_HOST; connect-src 'self' https://API_HOST; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; upgrade-insecure-requests" always;
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+```
+
+Compatibilidade verificada para este app: `style-src` **sem** `'unsafe-inline'`
+funciona (o Tailwind sai como CSS externo, e os `style={{...}}` de
+`ProgressBar`/`VideoPlayer` o React aplica via propriedade DOM, não como
+atributo); `script-src 'self'` basta (o `dist/index.html` não tem script
+inline); `frame-ancestors 'none'` dispensa `X-Frame-Options`; `form-action
+'none'` é seguro porque todo envio passa por axios, não por `<form action>`. As
+fontes vêm do Google Fonts via `<link>` no `index.html`, daí as duas exceções.
 
 ## Estado da integração
 

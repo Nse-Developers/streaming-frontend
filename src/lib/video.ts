@@ -87,6 +87,29 @@ export function profilePath(userId: number | null | undefined): string | null {
     : null
 }
 
+/** Vídeos que podem aparecer numa listagem PÚBLICA (feed da home, perfil de
+ *  outra pessoa).
+ *
+ *  O backend é quem decide o que envia, mas o feed geral (`GET /video`) hoje
+ *  devolve a lista inteira e a separação por visibilidade acabava recaindo
+ *  sobre cada tela. Centralizar aqui garante que uma tela nova não esqueça o
+ *  filtro — e que rascunho ou vídeo privado de terceiros não vaze na UI se o
+ *  backend passar a mandá-los.
+ *
+ *  Só `PUBLISHED` passa: `DRAFT`/`PRIVATE` são do dono (vistos em "Meus
+ *  vídeos", por `GET /video/users/videos`), e `PROCESSING`/`DELETED` não têm o
+ *  que mostrar. Allowlist, não denylist: um status novo no backend fica
+ *  invisível até alguém decidir o contrário, em vez de aparecer sozinho. */
+export function isPubliclyVisible(video: Pick<VideoResponse, 'status'>): boolean {
+  return video.status === 'PUBLISHED'
+}
+
+/** Aplica `isPubliclyVisible` a uma lista, tolerando `undefined` (query ainda
+ *  carregando). */
+export function publicVideos(videos: UiVideo[] | undefined): UiVideo[] {
+  return (videos ?? []).filter(isPubliclyVisible)
+}
+
 export const STATUS_LABEL: Record<string, string> = {
   PUBLISHED: 'Publicado',
   DRAFT: 'Rascunho',

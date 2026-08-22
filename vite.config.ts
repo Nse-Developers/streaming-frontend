@@ -14,6 +14,28 @@ export default defineConfig(({ mode }) => {
   // 8080 é a porta do backend (server.port no application.properties).
   const target = env.VITE_API_URL || 'http://localhost:8080'
 
+  // Em produção a URL da API é embutida no bundle (ver src/api/client.ts) e
+  // NÃO tem default. Sem esta guarda, um build sem a variável gerava um
+  // bundle apontando para http://localhost:8080 — a máquina do VISITANTE.
+  // Com `withCredentials: true`, o POST /auth/login desse bundle entrega
+  // e-mail e senha a qualquer processo escutando naquela porta no computador
+  // dele. Falhar aqui é a diferença entre um deploy que não sai e um deploy
+  // que vaza credenciais sem ninguém perceber.
+  if (mode === 'production') {
+    if (!env.VITE_API_URL) {
+      throw new Error(
+        'VITE_API_URL é obrigatória no build de produção (ver src/api/client.ts).',
+      )
+    }
+    // http em produção significa credencial de sessão trafegando em claro, e
+    // o navegador bloqueia a request como mixed content se o front for https.
+    if (!/^https:\/\//i.test(env.VITE_API_URL)) {
+      throw new Error(
+        `VITE_API_URL deve usar https em produção (recebido: ${env.VITE_API_URL}).`,
+      )
+    }
+  }
+
   return {
     plugins: [react(), tailwindcss()],
     resolve: {

@@ -11,6 +11,7 @@ import { HeroVideo } from '@/components/video/HeroVideo'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { toErrorMessage } from '@/api/client'
+import { publicVideos } from '@/lib/video'
 
 /** Grid único usado pelo feed e pela busca — mantém o mesmo ritmo nas duas. */
 const GRID = 'grid grid-cols-1 gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
@@ -24,10 +25,8 @@ export function HomePage() {
   const search = rawSearch.toLowerCase()
 
   // Busca no cliente: a API não tem endpoint de busca, e a lista já vem inteira.
-  const published = useMemo(
-    () => (videos ?? []).filter((video) => video.status === 'PUBLISHED'),
-    [videos],
-  )
+  // O recorte de visibilidade vem de lib/video.ts (ponto único da regra).
+  const published = useMemo(() => publicVideos(videos), [videos])
 
   const filtered = useMemo(() => {
     if (!search) return published

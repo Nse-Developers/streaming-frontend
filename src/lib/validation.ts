@@ -195,14 +195,24 @@ export function validateThumbnailFile(file: File | null): string | null {
   return null
 }
 
-/** Só devolve URLs http(s) — usada antes de jogar valor vindo da API em
- *  src/href, para uma URL maliciosa no banco não virar XSS na renderização. */
+/** Só devolve URLs http(s) ABSOLUTAS — usada antes de jogar valor vindo da API
+ *  em src/href, para uma URL maliciosa no banco não virar XSS na renderização.
+ *
+ *  Sem base de resolução de propósito. Enquanto havia
+ *  `new URL(value, window.location.origin)`, dois valores indesejados passavam:
+ *  um caminho relativo (`/x`) virava uma URL da PRÓPRIA origem, e uma URL
+ *  protocol-relative (`//evil.com/x`) era promovida a `https://evil.com/x`
+ *  silenciosamente. Os quatro pontos de uso (thumbnail e vídeo do MinIO,
+ *  Instagram e YouTube do perfil) recebem sempre URL absoluta, então exigir o
+ *  esquema não perde nenhum caso legítimo e mantém a função alinhada ao
+ *  `isHttpUrl` de lib/video.ts, que já era estrito. */
 export function safeExternalUrl(value: string | null | undefined): string | null {
   if (!value) return null
   try {
-    const url = new URL(value, window.location.origin)
+    const url = new URL(value)
     return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
   } catch {
+    // Sem base, um valor relativo lança aqui — que é o resultado desejado.
     return null
   }
 }

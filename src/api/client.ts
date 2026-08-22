@@ -5,10 +5,15 @@ import type { ExceptionResponse } from './types'
  *  vite.config.ts): as requests saem para a MESMA origem do front, então não
  *  existe preflight nem CORS para falhar quando a porta do dev server muda.
  *  Em produção fala direto com a API, e aí o CORS do backend precisa liberar o
- *  domínio de onde o front é servido. */
-export const API_BASE_URL = import.meta.env.DEV
-  ? '/api'
-  : (import.meta.env.VITE_API_URL ?? 'http://localhost:8080')
+ *  domínio de onde o front é servido.
+ *
+ *  Em produção NÃO existe fallback: `vite.config.ts` falha o build quando
+ *  VITE_API_URL não está definida. Um default para localhost aqui seria
+ *  embutido no bundle e, junto de `withCredentials`, faria o navegador do
+ *  visitante enviar e-mail e senha do login para qualquer processo escutando
+ *  na porta 8080 da máquina DELE. Melhor o build quebrar do que o deploy
+ *  vazar credenciais em silêncio. */
+export const API_BASE_URL = import.meta.env.DEV ? '/api' : import.meta.env.VITE_API_URL
 
 export const http: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -60,6 +65,9 @@ const FALLBACK_BY_STATUS: Record<number, string> = {
   409: 'Essa ação já foi feita antes.',
   413: 'O arquivo é maior do que o limite permitido.',
   500: 'O servidor falhou ao processar essa ação. Tente de novo em instantes.',
+  502: 'O servidor está indisponível no momento. Tente de novo em instantes.',
+  503: 'O servidor está indisponível no momento. Tente de novo em instantes.',
+  504: 'O servidor demorou demais para responder. Tente de novo em instantes.',
 }
 
 http.interceptors.response.use(
@@ -89,9 +97,24 @@ http.interceptors.response.use(
       unauthorizedListeners.forEach((listener) => listener(status))
     }
 
+    // A mensagem do servidor só é exibida nos status em que ela é de NEGÓCIO
+    // ("categoria já existe", "arquivo grande demais") — casos em que o texto
+    // do backend é mais útil que qualquer fallback nosso.
+    //
+    // Em 5xx ela é descartada: `ExceptionResponse.message` de um erro não
+    // tratado carrega a mensagem da exceção do Spring, que pode trazer nome de
+    // tabela/coluna, fragmento de SQL, caminho de classe ou host do MinIO — e
+    // isso ia direto para a tela do usuário via toErrorMessage(). Detalhe de
+    // implementação não é mensagem de erro; serve de mapa para quem sonda.
     const apiMessage = typeof data?.message === 'string' ? data.message.trim() : ''
+    const trustApiMessage = status < 500
     return Promise.reject(
-      new ApiError(apiMessage || FALLBACK_BY_STATUS[status] || 'Algo deu errado.', status),
+      new ApiError(
+        (trustApiMessage ? apiMessage : '') ||
+          FALLBACK_BY_STATUS[status] ||
+          'Algo deu errado.',
+        status,
+      ),
     )
   },
 )
