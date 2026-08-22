@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Check, ChevronDown, Eye, UploadCloud } from 'lucide-react'
+import { Check, ChevronDown, Circle, Eye, UploadCloud } from 'lucide-react'
 import { AuthShell } from '@/components/auth/AuthShell'
 import { Input } from '@/components/ui/Input'
 import { PasswordInput } from '@/components/ui/PasswordInput'
@@ -215,11 +215,20 @@ export function RegisterPage() {
                   key={label}
                   className={cn(
                     'flex items-center gap-1.5 text-xs',
-                    ok ? 'text-success-500' : 'text-surface-600',
+                    ok ? 'text-success-ink' : 'text-surface-600',
                   )}
                 >
-                  <Check size={13} className={ok ? 'opacity-100' : 'opacity-30'} />
+                  {/* Ícones DIFERENTES, não o mesmo com opacidade menor: antes
+                      o único sinal de "atendido" era a cor e a transparência do
+                      Check — invisível para quem não distingue as duas cores, e
+                      inexistente para leitor de tela. */}
+                  {ok ? (
+                    <Check size={13} aria-hidden="true" />
+                  ) : (
+                    <Circle size={13} aria-hidden="true" />
+                  )}
                   {label}
+                  <span className="sr-only">{ok ? '(atendido)' : '(pendente)'}</span>
                 </li>
               )
             })}

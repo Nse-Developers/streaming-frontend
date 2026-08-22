@@ -27,7 +27,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           aria-invalid={Boolean(error)}
           {...props}
         />
-        {error && <p className="text-xs font-medium text-danger-400">{error}</p>}
+        {error && <p className="text-xs font-medium text-danger-ink">{error}</p>}
       </div>
     )
   },

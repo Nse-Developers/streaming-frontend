@@ -29,7 +29,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {error ? (
-          <p className="text-xs font-medium text-danger-400">{error}</p>
+          <p className="text-xs font-medium text-danger-ink">{error}</p>
         ) : hint ? (
           <p className="text-xs text-surface-600">{hint}</p>
         ) : null}

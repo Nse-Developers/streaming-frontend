@@ -146,14 +146,16 @@ export function UploadPage() {
               onChange={pickVideo}
               hint="MP4, WebM, MOV ou MKV — até 2 GB"
               icon={<Film size={26} className="text-surface-600" />}
+              // Vai como prop para o erro ficar ligado ao input por
+              // aria-describedby, em vez de ser um parágrafo solto ao lado.
+              error={fileError ?? undefined}
             />
             {file && !fileError && (
-              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-success-500">
-                <CheckCircle2 size={13} />
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-success-ink">
+                <CheckCircle2 size={13} aria-hidden="true" />
                 {formatBytes(file.size)}
               </p>
             )}
-            {fileError && <p className="mt-1.5 text-xs font-medium text-danger-400">{fileError}</p>}
           </div>
 
           <div>
@@ -165,10 +167,8 @@ export function UploadPage() {
               hint="JPG, PNG, WebP ou AVIF — até 15 MB"
               icon={<ImageIcon size={26} className="text-surface-600" />}
               showImagePreview
+              error={thumbError ?? undefined}
             />
-            {thumbError && (
-              <p className="mt-1.5 text-xs font-medium text-danger-400">{thumbError}</p>
-            )}
           </div>
         </div>
 

@@ -50,7 +50,7 @@ export function AdminPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 pb-16 pt-6 sm:px-6">
       <header>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-success-500/12 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-success-500">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-success-500/12 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-success-ink">
           <ShieldCheck size={12} />
           Administração
         </span>
@@ -201,7 +201,7 @@ function UsersSection() {
                   // Bloqueia a auto-exclusão: o admin perderia o próprio acesso.
                   disabled={isSelf}
                   onClick={() => setPendingEmail(item.email)}
-                  className="text-danger-400 hover:bg-danger-500/10 hover:text-danger-400"
+                  className="text-danger-ink hover:bg-danger-500/10 hover:text-danger-ink"
                 >
                   <Trash2 size={16} />
                 </Button>
@@ -403,7 +403,7 @@ function VideoRow({ video }: { video: UiVideo }) {
             size="sm"
             aria-label={`Excluir ${video.tittle}`}
             onClick={() => setConfirmOpen(true)}
-            className="text-danger-400 hover:bg-danger-500/10 hover:text-danger-400"
+            className="text-danger-ink hover:bg-danger-500/10 hover:text-danger-ink"
           >
             <Trash2 size={15} />
           </Button>
@@ -559,7 +559,7 @@ function CategoriesSection() {
                   size="sm"
                   aria-label={`Remover ${category.name}`}
                   onClick={() => setPendingName(category.name)}
-                  className="text-danger-400 hover:bg-danger-500/10 hover:text-danger-400"
+                  className="text-danger-ink hover:bg-danger-500/10 hover:text-danger-ink"
                 >
                   <Trash2 size={15} />
                 </Button>

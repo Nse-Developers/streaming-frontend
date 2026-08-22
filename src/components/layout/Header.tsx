@@ -152,7 +152,7 @@ export function Header({
                           {ACCOUNT_LABEL[user.userTypeAccount]}
                         </span>
                         {isAdmin && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-success-500/15 px-2 py-1 text-[11px] font-semibold text-success-400">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-success-500/15 px-2 py-1 text-[11px] font-semibold text-success-ink">
                             <ShieldCheck size={11} />
                             Admin
                           </span>
@@ -173,7 +173,7 @@ export function Header({
                           type="button"
                           role="menuitem"
                           onClick={handleLogout}
-                          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-danger-400 transition-colors hover:bg-danger-500/10"
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-danger-ink transition-colors hover:bg-danger-500/10"
                         >
                           <LogOut size={16} />
                           Sair

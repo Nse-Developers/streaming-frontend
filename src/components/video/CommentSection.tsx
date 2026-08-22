@@ -89,7 +89,7 @@ export function CommentSection({ videoId }: { videoId: number }) {
               className="w-full border-b border-surface-300 bg-transparent pb-2 text-sm text-surface-900 placeholder:text-surface-600 transition-colors focus:border-brand-400 focus:outline-none"
             />
             {errors.text && (
-              <p className="mt-1.5 text-xs font-medium text-danger-400">{errors.text.message}</p>
+              <p className="mt-1.5 text-xs font-medium text-danger-ink">{errors.text.message}</p>
             )}
             {text.trim().length > 0 && (
               <div className="mt-3 flex items-center justify-end gap-2">

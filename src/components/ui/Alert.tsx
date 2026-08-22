@@ -7,7 +7,7 @@ const TONES: Record<Tone, { icon: typeof Info; classes: string; iconClass: strin
   error: {
     icon: AlertTriangle,
     classes: 'border-danger-500/30 bg-danger-500/8',
-    iconClass: 'text-danger-400',
+    iconClass: 'text-danger-ink',
   },
   warning: {
     icon: AlertTriangle,
@@ -18,7 +18,7 @@ const TONES: Record<Tone, { icon: typeof Info; classes: string; iconClass: strin
   success: {
     icon: CheckCircle2,
     classes: 'border-success-500/30 bg-success-500/8',
-    iconClass: 'text-success-400',
+    iconClass: 'text-success-ink',
   },
 }
 

@@ -11,11 +11,26 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   isLoading?: boolean
 }
 
+/** O hover ESCURECE (500 -> 600), não clareia.
+ *
+ *  Clareando, o rótulo branco perdia contraste justamente sob o cursor:
+ *  brand caía de 4.84:1 para 3.28:1 e danger de 4.19:1 para 2.77:1 — abaixo do
+ *  mínimo 4.5:1 da WCAG AA para o texto de 14px destes botões. Escurecendo, o
+ *  hover melhora a leitura em vez de degradá-la (brand 6.85:1, danger 6.31:1).
+ *
+ *  `danger` também sobe o repouso para o degrau 600: em 500 o branco dava
+ *  4.19:1, ou seja, o botão de confirmar exclusão já nascia reprovado.
+ *
+ *  `disabled` usa surface sólido em vez de alpha da cor: `bg-brand-500/40`
+ *  composto sobre um card branco deixava o rótulo em 1.79:1 no tema claro —
+ *  praticamente invisível. */
 const variantClasses: Record<Variant, string> = {
-  primary: 'bg-brand-500 text-white hover:bg-brand-400 active:bg-brand-600 disabled:bg-brand-500/40',
+  primary:
+    'bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700 disabled:bg-surface-300 disabled:text-surface-600',
   secondary: 'bg-surface-200 text-surface-800 hover:bg-surface-300 active:bg-surface-400 disabled:opacity-40',
   ghost: 'bg-transparent text-surface-700 hover:bg-surface-200/60 hover:text-surface-900 active:bg-surface-200',
-  danger: 'bg-danger-500 text-white hover:bg-danger-400 active:bg-danger-600 disabled:bg-danger-500/40',
+  danger:
+    'bg-danger-600 text-white hover:bg-danger-700 active:bg-danger-700 disabled:bg-surface-300 disabled:text-surface-600',
 }
 
 const sizeClasses: Record<Size, string> = {

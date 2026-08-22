@@ -14,11 +14,11 @@ export function ForbiddenPage() {
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-lg flex-col items-center justify-center px-4 text-center">
-      <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-danger-500/12 text-danger-400">
+      <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-danger-500/12 text-danger-ink">
         <ShieldAlert size={30} />
       </div>
 
-      <p className="font-display text-sm font-bold uppercase tracking-[0.18em] text-danger-400">
+      <p className="font-display text-sm font-bold uppercase tracking-[0.18em] text-danger-ink">
         Erro 403
       </p>
       <h1 className="mt-2 font-display text-2xl font-extrabold tracking-tight text-surface-900 sm:text-3xl">

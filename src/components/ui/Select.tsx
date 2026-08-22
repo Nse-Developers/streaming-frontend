@@ -33,7 +33,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           </select>
           <ChevronDown size={16} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-surface-600" />
         </div>
-        {error && <p className="text-xs font-medium text-danger-400">{error}</p>}
+        {error && <p className="text-xs font-medium text-danger-ink">{error}</p>}
       </div>
     )
   },

@@ -33,7 +33,9 @@
   --color-accent-ink: var(--accent-ink);
 
   /* Success/danger são semânticos e independentes da marca. Success ficou no
-     verde-folha (não menta) para não ser confundido com o accent. */
+     verde-folha (não menta) para não ser confundido com o accent.
+     Estes degraus são para PREENCHIMENTO (fundo de badge, barra de progresso);
+     para TEXTO use `danger-ink`/`success-ink`, que trocam por tema. */
   --color-success-400: #4ade80;
   --color-success-500: #22b562;
   --color-success-600: #17924e;
@@ -41,6 +43,16 @@
   --color-danger-400: #f87171;
   --color-danger-500: #e23f3f;
   --color-danger-600: #b52a2a;
+  --color-danger-700: #9b1c1c;
+
+  /* Tons semânticos legíveis como TEXTO em qualquer tema — mesma ideia do
+     `brand-link`. Existem porque danger/success eram valores FIXOS entre os
+     temas, calibrados no fundo escuro: no tema claro `danger-400` sobre um
+     card branco dá 2.77:1 e `success-500` dá 2.67:1, abaixo do mínimo 4.5:1 da
+     WCAG AA — e `danger-400` é a cor de TODA mensagem de erro de formulário.
+     Ou seja: exatamente quem precisava ler um erro não conseguia. */
+  --color-danger-ink: var(--danger-ink);
+  --color-success-ink: var(--success-ink);
 
   --shadow-elevated: 0 12px 32px -8px rgb(0 0 0 / 0.45);
 
@@ -81,6 +93,8 @@
 
   --brand-link: #63b3ff; /* brand-300: 8.68:1 no fundo escuro */
   --accent-ink: #4de3b4; /* menta: 11.94:1 no fundo escuro */
+  --danger-ink: #f87171; /* danger-400: 6.99:1 no fundo escuro */
+  --success-ink: #4ade80; /* success-400: 11.10:1 no fundo escuro */
 }
 
 :root[data-theme="light"] {
@@ -110,6 +124,13 @@
      aparece), ambos acima do mínimo 4.5:1 da WCAG AA para texto. */
   --brand-link: #0b62cc;
   --accent-ink: #0f7a5c; /* menta escurecida: 4.95:1 no fundo claro */
+  /* Escurecidos para o fundo claro. Medidos sobre o surface-100 (#ffffff, o
+     fundo dos cards e do modal, onde as mensagens de erro aparecem) e sobre o
+     surface-0 (#f2f5fa), os dois piores casos:
+       danger  5.62:1 / 5.14:1
+       success 5.01:1 / 4.58:1 */
+  --danger-ink: #c62828;
+  --success-ink: #128043;
 }
 
 html,
