@@ -26,7 +26,7 @@ function HeroBody({ video }: { video: UiVideo }) {
     <>
       {/* max-h impede o destaque de empurrar o feed para fora da primeira
           dobra em telas largas — o aspect-ratio sozinho cresce sem limite. */}
-      <div className="aspect-[16/10] max-h-[62vh] w-full sm:aspect-[21/9] lg:aspect-[2.8/1]">
+      <div className="aspect-[16/10] max-h-[62vh] w-full sm:aspect-[21/9] min-[880px]:aspect-[2.6/1] lg:aspect-[2.8/1]">
         {video.safeThumbnail ? (
           <img
             src={video.safeThumbnail}

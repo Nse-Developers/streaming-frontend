@@ -129,7 +129,7 @@ function MyVideos({ status, email }: { status: VideoStatus; email: string }) {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 min-[880px]:grid-cols-3">
         {Array.from({ length: 3 }).map((_, index) => (
           <VideoCardSkeleton key={index} />
         ))}
@@ -193,7 +193,7 @@ function MyVideos({ status, email }: { status: VideoStatus; email: string }) {
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 min-[880px]:grid-cols-3">
         {data.map((video) => (
           <VideoCard
             key={video.key}

@@ -13,8 +13,19 @@ import { useToast } from '@/context/ToastContext'
 import { toErrorMessage } from '@/api/client'
 import { publicVideos } from '@/lib/video'
 
-/** Grid único usado pelo feed e pela busca — mantém o mesmo ritmo nas duas. */
-const GRID = 'grid grid-cols-1 gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+/** Grid único usado pelo feed e pela busca — mantém o mesmo ritmo nas duas.
+ *
+ *  A terceira coluna entra em 880px, não em `lg` (1024px). Enquanto o salto
+ *  era sm -> lg, o card ENCOLHIA quando a tela crescia: 352px a 768px, 468px a
+ *  1000px (duas colunas larguíssimas) e de repente 291px a 1024px, porque a
+ *  terceira coluna e o rail de 72px entravam no mesmo ponto. Num app de vídeo
+ *  a capa é o conteúdo — ela não pode diminuir num monitor maior.
+ *
+ *  A quinta coluna acima de 1700px existe porque o container trava em 1600px:
+ *  sem ela, 4 colunas de 376px ficam desproporcionalmente grandes num monitor
+ *  de 2560px. */
+const GRID =
+  'grid grid-cols-1 gap-x-4 gap-y-7 sm:grid-cols-2 min-[880px]:grid-cols-3 xl:grid-cols-4 min-[1700px]:grid-cols-5'
 
 export function HomePage() {
   const { data: videos, isLoading, isError, error, refetch, isFetching } = useVideos()
@@ -40,7 +51,7 @@ export function HomePage() {
   if (isLoading) {
     return (
       <div className="mx-auto max-w-[1600px] px-4 pb-12 pt-5 sm:px-6">
-        <div className="skeleton mb-9 aspect-[16/9] w-full rounded-xl sm:aspect-[21/9] lg:aspect-[2.6/1]" />
+        <div className="skeleton mb-9 aspect-[16/9] w-full rounded-xl sm:aspect-[21/9] min-[880px]:aspect-[2.6/1] lg:aspect-[2.8/1]" />
         <div className={GRID}>
           {Array.from({ length: 8 }).map((_, index) => (
             <VideoCardSkeleton key={index} />

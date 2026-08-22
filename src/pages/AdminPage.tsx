@@ -62,7 +62,7 @@ export function AdminPage() {
         </p>
       </header>
 
-      <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Metric label="Usuários" value={users.data?.length} icon={UsersIcon} loading={users.isLoading} />
         <Metric label="Vídeos" value={videos.data?.length} icon={Film} loading={videos.isLoading} />
         <Metric
@@ -181,7 +181,7 @@ function UsersSection() {
           {shown.map((item) => {
             const isSelf = item.email === currentUser?.email
             return (
-              <li key={item.id} className="flex items-center gap-3 p-3 sm:p-4">
+              <li key={item.id} className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4">
                 <Avatar name={`${item.name} ${item.surname}`} className="h-10 w-10 text-sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-surface-900">
@@ -349,8 +349,12 @@ function VideoRow({ video }: { video: UiVideo }) {
     }
   }
 
+  // flex-wrap abaixo de sm: com thumb (80px) + 3 botões de ação (~130px) na
+  // mesma linha, sobravam ~30px para o título num viewport de 320px e a linha
+  // virava reticências — o admin não distinguia um vídeo do outro. Envolvidos,
+  // o texto fica na primeira linha e as ações na segunda.
   return (
-    <li className="flex items-center gap-3 p-3 sm:p-4">
+    <li className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4">
       {video.safeThumbnail ? (
         <img
           src={video.safeThumbnail}
@@ -375,7 +379,7 @@ function VideoRow({ video }: { video: UiVideo }) {
       {/* Sem id não há como chamar as rotas por id — mostrar botões que só
           poderiam falhar seria pior que escondê-los (ver readId em lib/video). */}
       {id != null && (
-        <div className="flex shrink-0 items-center gap-0.5">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 max-sm:w-full max-sm:justify-end">
           {video.status !== 'PUBLISHED' && (
             <Button
               variant="ghost"

@@ -274,7 +274,7 @@ function PublicVideos({
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 min-[880px]:grid-cols-3">
         {Array.from({ length: 3 }).map((_, index) => (
           <VideoCardSkeleton key={index} />
         ))}
@@ -317,7 +317,7 @@ function PublicVideos({
       <p className="mb-4 text-sm text-surface-600">
         {mine.length} {mine.length === 1 ? 'vídeo publicado' : 'vídeos publicados'}
       </p>
-      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 min-[880px]:grid-cols-3">
         {mine.map((video) => (
           <VideoCard key={video.key} video={video} />
         ))}
@@ -339,7 +339,7 @@ function ProfileSkeleton() {
       <Skeleton className="mt-6 h-20 w-full rounded-xl" />
       <Skeleton className="mt-5 h-4 w-72" />
       <Skeleton className="mt-10 h-6 w-40" />
-      <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 min-[880px]:grid-cols-3">
         {Array.from({ length: 3 }).map((_, index) => (
           <VideoCardSkeleton key={index} />
         ))}

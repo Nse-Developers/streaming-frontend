@@ -61,7 +61,7 @@ export function VideoPage() {
   if (isLoading) {
     return (
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid gap-8 min-[880px]:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_360px]">
           <div>
             <Skeleton className="aspect-video w-full rounded-xl" />
             <Skeleton className="mt-4 h-7 w-3/4" />
@@ -109,7 +109,7 @@ export function VideoPage() {
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 pb-16 pt-4 sm:px-6 sm:pt-6">
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-8 min-[880px]:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
           <VideoPlayer src={safeExternalUrl(video.videoUrl)} poster={poster} title={video.tittle} />
 
@@ -182,7 +182,12 @@ export function VideoPage() {
           {related.length === 0 ? (
             <p className="text-sm text-surface-600">Nenhum outro vídeo por aqui ainda.</p>
           ) : (
-            <div className="space-y-4">
+            // Duas colunas só na faixa em que a lista ainda está EMPILHADA sob
+            // o player (640–879px): ali cada item tinha a largura inteira da
+            // página e virava uma linha quase vazia, com o thumb ocupando um
+            // quinto dela. A partir de 880px a lista vira coluna lateral e
+            // volta a ser uma por linha.
+            <div className="grid gap-4 sm:grid-cols-2 min-[880px]:grid-cols-1">
               {related.map((item) => (
                 <VideoCard key={item.key} video={item} compact />
               ))}

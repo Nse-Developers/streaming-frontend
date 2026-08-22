@@ -98,7 +98,11 @@ export function VideoCard({ video, compact, actions }: VideoCardProps) {
   if (compact) {
     return (
       <CardShell video={video} className="group flex gap-2.5 rounded-lg">
-        <Thumb video={video} className="aspect-video w-[168px] shrink-0 rounded-lg" />
+        {/* 128px abaixo de sm: com os 168px fixos, num viewport de 320px
+            sobravam 110px para o título de 2 linhas — que cortava em três
+            palavras. Este é o card dos relacionados, justamente o mais visto
+            em celular. */}
+        <Thumb video={video} className="aspect-video w-32 shrink-0 rounded-lg sm:w-[168px]" />
         <div className="min-w-0 flex-1 pt-0.5">
           <h3 className="line-clamp-2 text-[13px] font-semibold leading-snug text-surface-900">
             {video.tittle}
