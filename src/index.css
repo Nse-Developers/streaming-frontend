@@ -212,6 +212,17 @@ body {
   background: linear-gradient(90deg, transparent, rgb(0 0 0 / 0.04), transparent);
 }
 
+/* Em tela cheia o player deve PREENCHER a tela. O `aspect-video` do container
+   é correto no fluxo da página, mas num celular deitado (20:9) ele deixa
+   tarjas laterais enormes. O Tailwind v4 não tem variante `fullscreen:`, então
+   a regra vive aqui. */
+.player-shell:fullscreen {
+  aspect-ratio: auto;
+  height: 100%;
+  width: 100%;
+  border-radius: 0;
+}
+
 /* Slider de volume do player.
    O <input type="range"> nativo é cinza-sistema e não aceita estilo pelas
    classes do Tailwind: trilho e polegar só existem em pseudo-elementos, que

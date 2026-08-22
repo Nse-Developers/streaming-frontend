@@ -86,14 +86,14 @@ export function CommentSection({ videoId }: { videoId: number }) {
               placeholder="Adicione um comentário…"
               aria-label="Novo comentário"
               maxLength={1000}
-              className="w-full border-b border-surface-300 bg-transparent pb-2 text-sm text-surface-900 placeholder:text-surface-600 transition-colors focus:border-brand-400 focus:outline-none"
+              className="w-full border-b border-surface-300 bg-transparent pb-2 text-sm text-surface-900 placeholder:text-surface-600 transition-colors focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400"
             />
             {errors.text && (
               <p className="mt-1.5 text-xs font-medium text-danger-ink">{errors.text.message}</p>
             )}
             {text.trim().length > 0 && (
               <div className="mt-3 flex items-center justify-end gap-2">
-                <span className="mr-auto text-xs tabular-nums text-surface-500">
+                <span className="mr-auto text-xs tabular-nums text-surface-600">
                   {text.length}/1000
                 </span>
                 <Button type="button" variant="ghost" size="sm" onClick={() => reset({ text: '' })}>
@@ -176,7 +176,9 @@ export function CommentSection({ videoId }: { videoId: number }) {
                     disabled={!isAuthenticated}
                     onClick={() => onToggleLike(comment.commentId)}
                     className={cn(
-                      'mt-2 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium transition-colors focus-ring disabled:cursor-not-allowed disabled:opacity-50',
+                      // p-2 -m-1 amplia a área de toque de ~26px para ~40px
+                      // sem deslocar nada no layout.
+                      'mt-2 -m-1 inline-flex items-center gap-1.5 rounded-md p-2 text-xs font-medium transition-colors focus-ring disabled:cursor-not-allowed disabled:opacity-50',
                       liked
                         ? 'text-brand-link'
                         : 'text-surface-600 hover:bg-surface-200 hover:text-surface-800',

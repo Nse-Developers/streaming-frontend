@@ -34,7 +34,11 @@ const variantClasses: Record<Variant, string> = {
 }
 
 const sizeClasses: Record<Size, string> = {
-  sm: 'h-9 px-3 text-sm gap-1.5 rounded-md',
+  // min-h/min-w de 44px no toque: o `sm` media 39x36px, e nas linhas do Admin
+  // três desses ficam lado a lado com 2px de separação — um deles é excluir.
+  // O tamanho VISUAL não muda (h-9 continua valendo no ponteiro fino); a área
+  // cresce só onde o alvo é o dedo.
+  sm: 'h-9 px-3 text-sm gap-1.5 rounded-md max-sm:min-h-[44px] max-sm:min-w-[44px]',
   md: 'h-11 px-4 text-sm gap-2 rounded-lg',
   lg: 'h-12 px-6 text-base gap-2 rounded-lg',
 }
@@ -45,6 +49,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={disabled || isLoading}
+        // Sem aria-busy o botão apenas ficava indisponível, sem explicação:
+        // onde o rótulo não muda ("Entrar" segue "Entrar"), quem usa leitor de
+        // tela não tinha pista de que a ação está em curso.
+        aria-busy={isLoading}
         className={cn(
           'inline-flex items-center justify-center whitespace-nowrap font-display font-semibold tracking-tight transition-colors duration-150 disabled:cursor-not-allowed focus-ring',
           variantClasses[variant],
@@ -55,6 +63,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       >
         {isLoading && <Spinner size={16} className="text-current" />}
         {children}
+        {isLoading && <span className="sr-only">Enviando…</span>}
       </button>
     )
   },

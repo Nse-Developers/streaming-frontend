@@ -109,7 +109,14 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
     // Só esconde durante a reprodução: com o vídeo pausado, os controles ficam
     // à mão (é o que o YouTube faz — some só quando há algo para assistir).
     if (!videoRef.current?.paused) {
-      hideTimer.current = setTimeout(() => setShowControls(false), HIDE_DELAY_MS)
+      hideTimer.current = setTimeout(() => {
+        // Mover o mouse conta como atividade, mas FOCO de teclado não contava:
+        // quem tabulava até "Tela cheia" e parava 3s ficava com o foco num
+        // botão invisível (opacity-0), e o Tab seguia por elementos que ninguém
+        // vê. Enquanto o foco estiver dentro do player, os controles ficam.
+        if (containerRef.current?.contains(document.activeElement)) return
+        setShowControls(false)
+      }, HIDE_DELAY_MS)
     }
   }, [])
 
@@ -289,19 +296,33 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
     <div
       ref={containerRef}
       className={cn(
-        'group relative aspect-video w-full overflow-hidden rounded-xl bg-black',
+        // `player-shell` traz a regra de tela cheia (ver index.css): sem ela o
+        // aspect-video fixo deixava tarjas laterais num celular deitado (20:9).
+        'player-shell group relative aspect-video w-full overflow-hidden rounded-xl bg-black',
         // Some com o cursor junto dos controles: em tela cheia, uma seta parada
         // no meio do filme incomoda tanto quanto a barra.
         !showControls && 'cursor-none',
       )}
       onMouseMove={revealControls}
       onMouseEnter={revealControls}
+      // Foco entrando em qualquer controle traz a barra de volta: sem isto,
+      // tabular para dentro do player com os controles escondidos deixava o
+      // foco num elemento invisível.
+      onFocusCapture={revealControls}
       // Sair com o vídeo rodando esconde na hora, sem esperar os 3s.
       onMouseLeave={() => isPlaying && setShowControls(false)}
       // Em telas de toque não existe "mover o mouse": o toque é o sinal de
       // atividade que traz os controles de volta.
       onTouchStart={revealControls}
     >
+      {/* Os atalhos só eram descobríveis lendo o código. Aqui ficam
+          disponíveis para leitor de tela sem poluir a interface visual. */}
+      <p className="sr-only">
+        Atalhos: espaço ou K reproduz e pausa, setas esquerda e direita avançam
+        e voltam 5 segundos, setas cima e baixo ajustam o volume, M silencia, F
+        alterna tela cheia.
+      </p>
+
       <video
         ref={videoRef}
         src={src ?? undefined}
@@ -358,7 +379,7 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
         )}
       >
         <div
-          className="relative mb-1 h-4 cursor-pointer"
+          className="group/bar relative mb-1 h-4 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
           onClick={seek}
           role="slider"
           tabIndex={0}
@@ -367,11 +388,44 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
           aria-valuemin={0}
           aria-valuemax={Math.floor(duration)}
           aria-valuenow={Math.floor(currentTime)}
+          // Sem isto o leitor de tela anunciava só o número de segundos cru
+          // ("437"), sem unidade nem sentido.
+          aria-valuetext={`${formatTime(currentTime)} de ${formatTime(duration)}`}
           onKeyDown={(event) => {
             const video = videoRef.current
             if (!video) return
-            if (event.key === 'ArrowRight') video.currentTime += 5
-            if (event.key === 'ArrowLeft') video.currentTime -= 5
+            const total = video.duration || 0
+            const to = (seconds: number) => {
+              video.currentTime = Math.min(Math.max(seconds, 0), total)
+            }
+            switch (event.key) {
+              case 'ArrowRight':
+                to(video.currentTime + 5)
+                break
+              case 'ArrowLeft':
+                to(video.currentTime - 5)
+                break
+              // O papel `slider` faz o leitor de tela prometer estas teclas;
+              // sem elas, navegar um vídeo longo de 5 em 5s é inviável.
+              case 'PageUp':
+                to(video.currentTime + 30)
+                break
+              case 'PageDown':
+                to(video.currentTime - 30)
+                break
+              case 'Home':
+                to(0)
+                break
+              case 'End':
+                to(total)
+                break
+              default:
+                return
+            }
+            // Sem preventDefault, ArrowRight/PageDown rolavam a página ALÉM de
+            // mover o vídeo.
+            event.preventDefault()
+            revealControls()
           }}
         >
           <div className="absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-white/25">
@@ -379,13 +433,17 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
               className="relative h-full rounded-full bg-brand-500"
               style={{ width: `${progress * 100}%` }}
             >
-              <span className="absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-brand-500 opacity-0 transition-opacity group-hover:opacity-100" />
+              <span className="absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-brand-500 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible/bar:opacity-100" />
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-0.5 text-white sm:gap-1">
-          <ControlButton onClick={togglePlay} label={isPlaying ? 'Pausar' : 'Reproduzir'}>
+          <ControlButton
+            onClick={togglePlay}
+            label={isPlaying ? 'Pausar' : 'Reproduzir'}
+            keyShortcut="k"
+          >
             {isPlaying ? (
               <Pause size={19} fill="currentColor" />
             ) : (
@@ -397,7 +455,11 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
               no foco por teclado) para não competir com a barra de progresso,
               e fica sempre visível no toque, onde não existe hover. */}
           <div className="group/vol flex items-center">
-            <ControlButton onClick={toggleMute} label={isMuted ? 'Ativar som' : 'Silenciar'}>
+            <ControlButton
+              onClick={toggleMute}
+              label={isMuted ? 'Ativar som' : 'Silenciar'}
+              keyShortcut="m"
+            >
               <VolumeIcon muted={isMuted} volume={volume} />
             </ControlButton>
 
@@ -423,11 +485,20 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
                   Math.round(isMuted ? 0 : volume * 100)
                 }%, rgb(255 255 255 / 0.3) ${Math.round(isMuted ? 0 : volume * 100)}%)`,
               }}
-              className="volume-slider h-1 w-0 cursor-pointer opacity-0 transition-[width,opacity] duration-200 focus-visible:w-16 focus-visible:opacity-100 group-hover/vol:w-16 group-hover/vol:opacity-100 sm:group-hover/vol:w-20"
+              // step 5 para casar com as setas do atalho global (que mexem 5%);
+              // com o padrão 1 o mesmo gesto tinha duas granularidades.
+              step={5}
+              // hidden no mobile: sem hover ele nunca se revelava, e um alvo de
+              // 0px de largura é inalcançável ao toque. Lá o botão de mudo e as
+              // teclas de volume do aparelho dão conta.
+              className="volume-slider hidden h-1 w-0 cursor-pointer opacity-0 transition-[width,opacity] duration-200 focus-visible:w-16 focus-visible:opacity-100 group-hover/vol:w-16 group-hover/vol:opacity-100 sm:block sm:group-hover/vol:w-20"
             />
           </div>
 
-          <span className="ml-1 font-mono text-[11px] tabular-nums text-white/85 sm:text-xs">
+          {/* shrink-0 e fonte menor no mobile: a 320px o relógio com duração de
+              1h ("1:02:33 / 1:45:00") somado ao slider de volume aberto
+              empurrava o botão de tela cheia para fora do recorte. */}
+          <span className="ml-1 shrink-0 font-mono text-[10px] tabular-nums text-white/85 sm:text-xs">
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>
 
@@ -435,6 +506,7 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
             <ControlButton
               onClick={toggleFullscreen}
               label={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+              keyShortcut="f"
             >
               {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
             </ControlButton>
@@ -458,16 +530,23 @@ function ControlButton({
   onClick,
   label,
   children,
+  /** Tecla de atalho equivalente. Vira `aria-keyshortcuts` e entra no `title`:
+   *  os atalhos existiam (espaço/K, setas, M, F) mas nada na interface dizia
+   *  que existiam. */
+  keyShortcut,
 }: {
   onClick: () => void
   label: string
   children: React.ReactNode
+  keyShortcut?: string
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
+      aria-keyshortcuts={keyShortcut}
+      title={keyShortcut ? `${label} (${keyShortcut.toUpperCase()})` : label}
       className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-white/15 focus-ring"
     >
       {children}

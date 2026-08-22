@@ -166,7 +166,7 @@ export function HomePage() {
                       pick(null)
                       showToast('Destaque liberado — volta a mostrar o mais recente.', 'info')
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-900 focus-ring"
+                    className="-m-1 inline-flex items-center gap-1.5 rounded-md p-2 text-xs font-medium text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-900 focus-ring"
                   >
                     <PinOff size={12} />
                     Remover
@@ -177,7 +177,7 @@ export function HomePage() {
                   Mostrando o vídeo mais recente. Use “Destacar” num card abaixo para fixar outro.
                 </span>
               )}
-              <span className="text-xs text-surface-500">Vale só neste navegador.</span>
+              <span className="text-xs text-surface-600">Vale só neste navegador.</span>
             </div>
           )}
         </section>
@@ -204,7 +204,7 @@ export function HomePage() {
                         pick(video.id!)
                         showToast(`“${video.tittle}” agora é o destaque.`, 'success')
                       }}
-                      className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-900 focus-ring"
+                      className="-m-1 inline-flex items-center gap-1.5 rounded-md p-2 text-xs font-medium text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-900 focus-ring"
                     >
                       <Pin size={12} />
                       Destacar
