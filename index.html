@@ -3,8 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/byou-mark.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover habilita as env(safe-area-inset-*), usadas pela
+         BottomNav para não ficar sob a barra de gestos do iPhone. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
+    <!-- Pinta a barra do navegador no mobile com o fundo do app (surface-0 de
+         cada tema); sem isto ela fica branca sobre uma interface escura. -->
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0e12" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f5fa" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn'
  *  sidebar larga era quase toda vazia e roubava largura do grid de vídeos —
  *  que é o conteúdo real da tela. O logo vive no Header, não aqui. */
 const baseLink =
-  'flex flex-col items-center gap-1 rounded-lg px-1 py-3 text-[10px] font-medium text-surface-600 transition-colors duration-150 hover:bg-surface-200/70 hover:text-surface-900'
+  'flex flex-col items-center gap-1 rounded-lg px-1 py-3 text-[10px] font-medium text-surface-600 transition-colors duration-150 hover:bg-surface-200/70 hover:text-surface-900 focus-ring'
 const activeLink = 'text-surface-900'
 
 export function Sidebar() {
@@ -15,7 +15,10 @@ export function Sidebar() {
   const items = NAV_ITEMS.filter((item) => item.show?.(auth) ?? true)
 
   return (
-    <aside className="hidden w-[72px] shrink-0 flex-col gap-1 px-1.5 pt-2 lg:flex">
+    <nav
+      aria-label="Navegação principal"
+      className="hidden w-[72px] shrink-0 flex-col gap-1 px-1.5 pt-2 lg:flex"
+    >
       {items.map(({ to, end, icon: Icon, label, mobileLabel }) => (
         <NavLink
           key={to}
@@ -26,12 +29,13 @@ export function Sidebar() {
         >
           {({ isActive }) => (
             <>
-              <Icon size={21} strokeWidth={isActive ? 2.4 : 1.8} />
+              <Icon size={21} strokeWidth={isActive ? 2.4 : 1.8} aria-hidden="true" />
               <span className="leading-tight">{mobileLabel}</span>
+              {isActive && <span className="sr-only">(página atual)</span>}
             </>
           )}
         </NavLink>
       ))}
-    </aside>
+    </nav>
   )
 }

@@ -158,6 +158,24 @@ body {
   }
 }
 
+/* Quem pede menos movimento no sistema tem motivo (enxaqueca vestibular,
+   sensibilidade a movimento). Corta as animações em vez de reduzi-las, mas
+   mantém as transições de cor — elas não deslocam nada na tela. O shimmer do
+   skeleton é o caso mais incômodo: é infinito. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton::after {
+    animation: none;
+  }
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Search, Moon, Sun, LogOut, User, ShieldCheck, X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
@@ -19,7 +19,6 @@ export function Header({
   const { user, isAuthenticated, isAdmin, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
   // Fecha o menu com Escape — mesmo contrato de teclado do Modal.
@@ -114,14 +113,14 @@ export function Header({
             </button>
 
             {isAuthenticated && user ? (
-              <div className="relative" ref={menuRef}>
+              <div className="relative">
                 <button
                   type="button"
                   onClick={() => setMenuOpen((open) => !open)}
                   className="rounded-full focus-ring"
                   aria-label="Menu da conta"
                   aria-expanded={menuOpen}
-                  aria-haspopup="menu"
+                  aria-haspopup="true"
                 >
                   <Avatar name={user.name} />
                 </button>
@@ -133,8 +132,11 @@ export function Header({
                       onClick={() => setMenuOpen(false)}
                       aria-hidden="true"
                     />
+                    {/* Sem role="menu": o padrão ARIA de menu exige navegação
+                        por setas e roving tabindex, que não existem aqui. O que
+                        o markup faz de fato é um popover navegado por Tab —
+                        declarar o role errado só mente para o leitor de tela. */}
                     <div
-                      role="menu"
                       className="absolute right-0 top-12 z-20 w-64 overflow-hidden rounded-xl border border-surface-200 bg-surface-100 shadow-elevated"
                     >
                       <div className="flex items-center gap-3 p-3">
@@ -162,18 +164,16 @@ export function Header({
                       <div className="border-t border-surface-200 p-2">
                         <Link
                           to="/profile"
-                          role="menuitem"
                           onClick={() => setMenuOpen(false)}
-                          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-surface-700 transition-colors hover:bg-surface-200 hover:text-surface-900"
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-surface-700 transition-colors hover:bg-surface-200 hover:text-surface-900 focus-ring"
                         >
                           <User size={16} />
                           Meu perfil
                         </Link>
                         <button
                           type="button"
-                          role="menuitem"
                           onClick={handleLogout}
-                          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-danger-ink transition-colors hover:bg-danger-500/10"
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-danger-ink transition-colors hover:bg-danger-500/10 focus-ring"
                         >
                           <LogOut size={16} />
                           Sair

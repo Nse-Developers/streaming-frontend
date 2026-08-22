@@ -203,7 +203,18 @@ export function UploadPage() {
               </span>
               <span className="font-semibold tabular-nums text-brand-link">{progress}%</span>
             </div>
-            <ProgressBar value={progress} />
+            <ProgressBar
+              value={progress}
+              label={progress < 100 ? 'Enviando arquivos' : 'Processando no servidor'}
+            />
+            {/* Anuncia o progresso em marcos de 25%, não a cada 1%: a barra
+                atualiza dezenas de vezes e um live region a cada ponto
+                percentual tornaria o leitor de tela inutilizável. */}
+            <p role="status" className="sr-only">
+              {progress >= 100
+                ? 'Envio concluído, processando no servidor.'
+                : `Envio em ${Math.floor(progress / 25) * 25} por cento.`}
+            </p>
             <p className="mt-2 text-xs text-surface-600">
               Não feche esta página até o envio terminar.
             </p>

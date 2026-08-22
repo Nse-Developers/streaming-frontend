@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { CheckCircle2, XCircle, Info, X } from 'lucide-react'
 
 type ToastVariant = 'success' | 'error' | 'info'
@@ -21,11 +30,26 @@ const variantStyles: Record<ToastVariant, { icon: typeof CheckCircle2; classes: 
   info: { icon: Info, classes: 'border-surface-400/40 text-surface-700' },
 }
 
+/** Tempo na tela, proporcional ao tamanho da mensagem.
+ *
+ *  Eram 5s fixos para tudo, mas os toasts carregam mensagem de erro do
+ *  servidor, de comprimento arbitrário — uma frase longa sumia antes de ser
+ *  lida. Base de 5s mais ~50ms por caractere, com teto de 12s. */
+function readingTime(message: string): number {
+  return Math.min(12_000, 5_000 + message.length * 50)
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const counterRef = useRef(0)
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
 
   const dismiss = useCallback((id: number) => {
+    const timer = timers.current.get(id)
+    if (timer) {
+      clearTimeout(timer)
+      timers.current.delete(id)
+    }
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
@@ -33,40 +57,119 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (message: string, variant: ToastVariant = 'info') => {
       const id = ++counterRef.current
       setToasts((prev) => [...prev, { id, message, variant }])
-      setTimeout(() => dismiss(id), 5000)
+      timers.current.set(id, setTimeout(() => dismiss(id), readingTime(message)))
     },
     [dismiss],
   )
+
+  /** Pausa a contagem enquanto o cursor está sobre o toast ou o foco está
+   *  dentro dele: sem isto, tabular até "Fechar notificação" podia fazer o
+   *  toast desaparecer sob o próprio foco, deixando-o órfão. */
+  const hold = useCallback((id: number) => {
+    const timer = timers.current.get(id)
+    if (timer) {
+      clearTimeout(timer)
+      timers.current.delete(id)
+    }
+  }, [])
+
+  const resume = useCallback(
+    (id: number, message: string) => {
+      if (timers.current.has(id)) return
+      timers.current.set(id, setTimeout(() => dismiss(id), readingTime(message)))
+    },
+    [dismiss],
+  )
+
+  useEffect(() => {
+    const pending = timers.current
+    return () => {
+      pending.forEach(clearTimeout)
+      pending.clear()
+    }
+  }, [])
 
   const value = useMemo(() => ({ showToast }), [showToast])
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 p-4 sm:items-end sm:p-6">
-        {toasts.map((toast) => {
-          const { icon: Icon, classes } = variantStyles[toast.variant]
-          return (
-            <div
+      {/* As duas regiões vivas ficam SEMPRE no DOM, vazias quando não há
+          toast. Uma live region que nasce junto com o texto dentro dela é
+          anunciada de forma inconsistente (NVDA/VoiceOver): o leitor precisa
+          já estar observando a região quando o conteúdo muda.
+          Erro vai na `assertive` — antes tudo era role="status" (polite), e um
+          erro esperava o leitor terminar a fala corrente, podendo desaparecer
+          antes de ser anunciado. */}
+      <div
+        aria-live="polite"
+        aria-atomic="false"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 p-4 sm:items-end sm:p-6"
+      >
+        {toasts
+          .filter((toast) => toast.variant !== 'error')
+          .map((toast) => (
+            <ToastCard
               key={toast.id}
-              role="status"
-              className={`pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border bg-surface-100 px-4 py-3 shadow-elevated animate-[toast-in_200ms_ease-out] ${classes}`}
-            >
-              <Icon size={18} className="mt-0.5 shrink-0" />
-              <p className="flex-1 text-sm font-medium text-surface-800">{toast.message}</p>
-              <button
-                type="button"
-                onClick={() => dismiss(toast.id)}
-                className="shrink-0 rounded p-0.5 text-surface-600 hover:text-surface-800 focus-ring"
-                aria-label="Fechar notificação"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          )
-        })}
+              toast={toast}
+              onDismiss={dismiss}
+              onHold={hold}
+              onResume={resume}
+            />
+          ))}
+      </div>
+      <div
+        role="alert"
+        aria-live="assertive"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 p-4 sm:items-end sm:p-6"
+      >
+        {toasts
+          .filter((toast) => toast.variant === 'error')
+          .map((toast) => (
+            <ToastCard
+              key={toast.id}
+              toast={toast}
+              onDismiss={dismiss}
+              onHold={hold}
+              onResume={resume}
+            />
+          ))}
       </div>
     </ToastContext.Provider>
+  )
+}
+
+function ToastCard({
+  toast,
+  onDismiss,
+  onHold,
+  onResume,
+}: {
+  toast: Toast
+  onDismiss: (id: number) => void
+  onHold: (id: number) => void
+  onResume: (id: number, message: string) => void
+}) {
+  const { icon: Icon, classes } = variantStyles[toast.variant]
+  return (
+    <div
+      onMouseEnter={() => onHold(toast.id)}
+      onMouseLeave={() => onResume(toast.id, toast.message)}
+      onFocus={() => onHold(toast.id)}
+      onBlur={() => onResume(toast.id, toast.message)}
+      className={`pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border bg-surface-100 px-4 py-3 shadow-elevated animate-[toast-in_200ms_ease-out] ${classes}`}
+    >
+      <Icon size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+      <p className="flex-1 text-sm font-medium text-surface-800">{toast.message}</p>
+      <button
+        type="button"
+        onClick={() => onDismiss(toast.id)}
+        className="-m-1 shrink-0 rounded p-2 text-surface-600 hover:text-surface-800 focus-ring"
+        aria-label="Fechar notificação"
+      >
+        <X size={14} />
+      </button>
+    </div>
   )
 }
 

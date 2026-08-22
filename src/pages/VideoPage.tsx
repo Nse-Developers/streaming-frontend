@@ -45,6 +45,7 @@ export function VideoPage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
         <EmptyState
+          headingLevel="h1"
           icon={Compass}
           title="Endereço inválido"
           description="O identificador do vídeo não é um número válido."
@@ -87,6 +88,7 @@ export function VideoPage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
         <EmptyState
+          headingLevel="h1"
           icon={ServerCrash}
           title="Vídeo não encontrado"
           description={

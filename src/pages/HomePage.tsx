@@ -4,7 +4,7 @@ import { Film, SearchX, ServerCrash, RotateCw, UploadCloud, Pin, PinOff } from '
 import { useVideos } from '@/hooks/useVideos'
 import { useFeaturedVideo } from '@/hooks/useFeaturedVideo'
 import { VideoCard } from '@/components/video/VideoCard'
-import { VideoCardSkeleton } from '@/components/ui/Skeleton'
+import { LoadingRegion, VideoCardSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
 import { HeroVideo } from '@/components/video/HeroVideo'
@@ -50,14 +50,17 @@ export function HomePage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-[1600px] px-4 pb-12 pt-5 sm:px-6">
-        <div className="skeleton mb-9 aspect-[16/9] w-full rounded-xl sm:aspect-[21/9] min-[880px]:aspect-[2.6/1] lg:aspect-[2.8/1]" />
+      <LoadingRegion label="Carregando vídeos…" className="mx-auto max-w-[1600px] px-4 pb-12 pt-5 sm:px-6">
+        <div
+          aria-hidden="true"
+          className="skeleton mb-9 aspect-[16/9] w-full rounded-xl sm:aspect-[21/9] min-[880px]:aspect-[2.6/1] lg:aspect-[2.8/1]"
+        />
         <div className={GRID}>
           {Array.from({ length: 8 }).map((_, index) => (
             <VideoCardSkeleton key={index} />
           ))}
         </div>
-      </div>
+      </LoadingRegion>
     )
   }
 
@@ -65,6 +68,7 @@ export function HomePage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
         <EmptyState
+          headingLevel="h1"
           icon={ServerCrash}
           title="Não foi possível carregar os vídeos"
           description={toErrorMessage(error)}
@@ -85,6 +89,7 @@ export function HomePage() {
         {filtered.length === 0 ? (
           <div className="mx-auto max-w-2xl py-16">
             <EmptyState
+              headingLevel="h1"
               icon={SearchX}
               title={`Nada encontrado para "${rawSearch}"`}
               description="Tente outro termo ou confira a escrita."
@@ -92,7 +97,11 @@ export function HomePage() {
           </div>
         ) : (
           <>
-            <p className="mb-5 text-sm text-surface-600">
+            <h1 className="sr-only">Resultados da busca</h1>
+            {/* role=status: a contagem muda a cada tecla digitada na busca e o
+                grid é substituído em silêncio. Assim o leitor de tela recebe
+                "12 resultados para X" sem precisar sair e voltar. */}
+            <p role="status" className="mb-5 text-sm text-surface-600">
               {filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'} para{' '}
               <span className="font-medium text-surface-900">“{rawSearch}”</span>
             </p>
@@ -111,6 +120,7 @@ export function HomePage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
         <EmptyState
+          headingLevel="h1"
           icon={Film}
           title="Ainda não há vídeos publicados"
           description={
@@ -175,9 +185,12 @@ export function HomePage() {
 
       {rest.length > 0 && (
         <>
-          <h2 className="mb-4 font-display text-base font-bold text-surface-900">
+          {/* h1 da home. Visualmente é o mesmo título de seção de antes, mas
+              como h1: era a única página que começava em h2, e quem navega por
+              headings chegava na tela principal sem ponto de entrada. */}
+          <h1 className="mb-4 font-display text-base font-bold text-surface-900">
             Vídeos recentes
-          </h2>
+          </h1>
           <div className={GRID}>
             {rest.map((video) => (
               <VideoCard

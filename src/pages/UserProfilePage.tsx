@@ -48,6 +48,7 @@ export function UserProfilePage() {
     return (
       <PageShell>
         <EmptyState
+          headingLevel="h1"
           icon={Compass}
           title="Endereço inválido"
           description="O identificador do perfil não é um número válido."
@@ -67,6 +68,7 @@ export function UserProfilePage() {
     return (
       <PageShell>
         <EmptyState
+          headingLevel="h1"
           icon={ServerCrash}
           title="Perfil não encontrado"
           description={

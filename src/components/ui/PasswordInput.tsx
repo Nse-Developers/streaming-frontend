@@ -1,4 +1,4 @@
-import { forwardRef, useState, type InputHTMLAttributes } from 'react'
+import { forwardRef, useId, useState, type InputHTMLAttributes } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
@@ -11,7 +11,10 @@ interface PasswordInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>,
 export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
   ({ label, error, hint, id, className, ...props }, ref) => {
     const [visible, setVisible] = useState(false)
-    const inputId = id ?? props.name
+    const generatedId = useId()
+    const inputId = id ?? props.name ?? generatedId
+    // Liga a mensagem de erro ao campo — ver comentário em Input.tsx.
+    const msgId = `${inputId}-msg`
 
     return (
       <div className="flex flex-col gap-1.5">
@@ -33,23 +36,31 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
               className,
             )}
             aria-invalid={Boolean(error)}
+            aria-describedby={error || hint ? msgId : undefined}
             {...props}
           />
           <button
             type="button"
             onClick={() => setVisible((v) => !v)}
-            // tabIndex -1: não interromper o fluxo de Tab entre os campos.
-            tabIndex={-1}
-            className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-800 focus-ring"
+            // Sem tabIndex -1: ele mantinha o botão fora do Tab "para não
+            // interromper o fluxo entre os campos", mas o efeito era tornar o
+            // recurso exclusivo de quem usa mouse — quem navega por teclado
+            // não conseguia revelar a senha. Uma parada a mais no Tab custa
+            // menos que um recurso inacessível.
+            className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-800 focus-ring"
             aria-label={visible ? 'Ocultar senha' : 'Mostrar senha'}
           >
             {visible ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
         {error ? (
-          <p className="text-xs font-medium text-danger-ink">{error}</p>
+          <p id={msgId} className="text-xs font-medium text-danger-ink">
+            {error}
+          </p>
         ) : hint ? (
-          <p className="text-xs text-surface-600">{hint}</p>
+          <p id={msgId} className="text-xs text-surface-600">
+            {hint}
+          </p>
         ) : null}
       </div>
     )

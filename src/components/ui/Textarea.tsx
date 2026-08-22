@@ -1,4 +1,4 @@
-import { forwardRef, type TextareaHTMLAttributes } from 'react'
+import { forwardRef, useId, type TextareaHTMLAttributes } from 'react'
 import { cn } from '@/lib/cn'
 
 interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -8,7 +8,10 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ label, error, id, className, ...props }, ref) => {
-    const areaId = id ?? props.name
+    const generatedId = useId()
+    const areaId = id ?? props.name ?? generatedId
+    // Liga a mensagem de erro ao campo — ver comentário em Input.tsx.
+    const msgId = `${areaId}-msg`
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
@@ -25,9 +28,14 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
             className,
           )}
           aria-invalid={Boolean(error)}
+          aria-describedby={error ? msgId : undefined}
           {...props}
         />
-        {error && <p className="text-xs font-medium text-danger-ink">{error}</p>}
+        {error && (
+          <p id={msgId} className="text-xs font-medium text-danger-ink">
+            {error}
+          </p>
+        )}
       </div>
     )
   },
