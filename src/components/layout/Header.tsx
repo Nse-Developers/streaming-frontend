@@ -55,7 +55,7 @@ export function Header({
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="Buscar vídeos e criadores"
-              className="h-10 w-full rounded-full bg-surface-100 pl-10 pr-4 text-sm text-surface-900 placeholder:text-surface-600 focus:outline-none focus:ring-2 focus:ring-brand-400/60"
+              className="h-10 w-full rounded-full bg-surface-100 pl-10 pr-4 text-sm text-surface-900 placeholder:text-surface-600 focus-ring"
             />
           </div>
           <button
@@ -86,7 +86,7 @@ export function Header({
                 onChange={(event) => onSearchChange(event.target.value)}
                 placeholder="Buscar vídeos e criadores"
                 aria-label="Buscar"
-                className="h-10 w-full rounded-full border border-transparent bg-surface-100 pl-10 pr-4 text-sm text-surface-900 placeholder:text-surface-600 transition-colors focus:border-brand-400/40 focus:outline-none focus:ring-2 focus:ring-brand-400/60"
+                className="h-10 w-full rounded-full border border-transparent bg-surface-100 pl-10 pr-4 text-sm text-surface-900 placeholder:text-surface-600 transition-colors focus-visible:border-focus-ring focus-ring"
               />
             </div>
           )}

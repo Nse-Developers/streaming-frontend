@@ -127,7 +127,7 @@ export function UploadPage() {
       </header>
 
       {formError && (
-        <Alert tone="error" className="mb-5">
+        <Alert tone="error" focusOnMount className="mb-5">
           {formError}
         </Alert>
       )}

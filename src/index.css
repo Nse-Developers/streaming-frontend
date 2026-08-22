@@ -54,6 +54,11 @@
   --color-danger-ink: var(--danger-ink);
   --color-success-ink: var(--success-ink);
 
+  /* Cor do anel de foco, por tema. `brand-400` fixo dava só 3.0:1 sobre o
+     surface-0 do tema claro — exatamente no limite da WCAG 1.4.11 para
+     componentes não textuais, e abaixo dele em qualquer variação. */
+  --color-focus-ring: var(--focus-ring-color);
+
   --shadow-elevated: 0 12px 32px -8px rgb(0 0 0 / 0.45);
 
   /* Surface — semantic neutral scale, values swapped per theme below.
@@ -95,6 +100,7 @@
   --accent-ink: #4de3b4; /* menta: 11.94:1 no fundo escuro */
   --danger-ink: #f87171; /* danger-400: 6.99:1 no fundo escuro */
   --success-ink: #4ade80; /* success-400: 11.10:1 no fundo escuro */
+  --focus-ring-color: #2a90f5; /* brand-400: 5.90:1 sobre o surface-0 */
 }
 
 :root[data-theme="light"] {
@@ -131,6 +137,7 @@
        success 5.01:1 / 4.58:1 */
   --danger-ink: #c62828;
   --success-ink: #128043;
+  --focus-ring-color: #0d6fdd; /* brand-500: 4.43:1 sobre o surface-0 */
 }
 
 html,
@@ -153,8 +160,19 @@ body {
 }
 
 @layer utilities {
+  /* O offset padrão é o fundo da página (surface-0). Num contêiner sobre
+     surface-100 (Modal, Card) a faixa do offset sai da cor errada — nesses
+     casos combine `focus-ring` com `ring-offset-surface-100`, que sobrescreve
+     só o offset. Ver `.modal-surface` abaixo, que já faz isso para tudo dentro
+     de um diálogo. */
   .focus-ring {
-    @apply outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0;
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0;
+  }
+
+  /* Aplicado no painel do Modal: tudo que receber foco lá dentro desenha o
+     offset sobre o fundo real do diálogo, não sobre o da página. */
+  .modal-surface :focus-visible {
+    --tw-ring-offset-color: var(--color-surface-100);
   }
 }
 

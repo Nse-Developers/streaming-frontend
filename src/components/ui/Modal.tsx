@@ -102,7 +102,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
         tabIndex={-1}
         // dvh e não vh: no Safari iOS a barra de endereço come ~60px da vh, e o
         // corte que o max-h deveria evitar volta a acontecer.
-        className="relative z-10 my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col rounded-xl border border-surface-300 bg-surface-100 p-5 shadow-elevated focus:outline-none"
+        className="modal-surface relative z-10 my-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col rounded-xl border border-surface-300 bg-surface-100 p-5 shadow-elevated focus:outline-none"
       >
         <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
           {title && <h2 className="font-display text-lg font-semibold text-surface-900">{title}</h2>}
