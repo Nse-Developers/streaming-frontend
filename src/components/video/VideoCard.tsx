@@ -37,7 +37,7 @@ function Thumb({ video, className }: { video: UiVideo; className?: string }) {
           loading="lazy"
           decoding="async"
           className="h-full w-full object-cover"
-          // Thumbnail vem do MinIO; se o objeto sumir, cai no placeholder.
+          // Thumbnail vem do storage; se o objeto sumir, cai no placeholder.
           onError={(event) => {
             event.currentTarget.style.display = 'none'
           }}
