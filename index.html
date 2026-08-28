@@ -18,6 +18,25 @@
       rel="stylesheet"
     />
     <title>Byou &mdash; streaming</title>
+    <!-- Descrição e Open Graph: sem estes, o link compartilhado (o botão
+         "Compartilhar" da página do vídeo existe e é usado) aparece no
+         WhatsApp/Telegram/X como uma URL crua, sem título nem imagem.
+         Valores estáticos porque isto é uma SPA: o HTML servido é o mesmo para
+         toda rota, então o crawler nunca vê o título do vídeo específico.
+         Preview por vídeo exige SSR ou pré-render — não é o caso hoje. -->
+    <meta
+      name="description"
+      content="Byou é uma plataforma de streaming onde criadores publicam seus vídeos e o público descobre, comenta e avalia."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Byou" />
+    <meta property="og:title" content="Byou — streaming" />
+    <meta
+      property="og:description"
+      content="Publique, descubra e avalie vídeos de criadores independentes."
+    />
+    <meta property="og:image" content="/byou-logo.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <div id="root"></div>
