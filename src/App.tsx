@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
@@ -6,16 +7,41 @@ import {
   RequireAuth,
   RequireCreator,
 } from '@/components/auth/RouteGuards'
+import { Spinner } from '@/components/ui/Spinner'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { HomePage } from '@/pages/HomePage'
 import { VideoPage } from '@/pages/VideoPage'
-import { UploadPage } from '@/pages/UploadPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { UserProfilePage } from '@/pages/UserProfilePage'
-import { AdminPage } from '@/pages/AdminPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { ForbiddenPage } from '@/pages/ForbiddenPage'
+
+/** Telas carregadas SÓ quando a rota é aberta.
+ *
+ *  Estas duas estão atrás de um guard de papel, então a maioria dos visitantes
+ *  nunca as abre — mas o código ia no mesmo arquivo para todo mundo. AdminPage
+ *  é a maior tela do app (28 KB de fonte, mais o que ela arrasta de
+ *  formulário/modal) e só ADMIN chega nela; UploadPage só CREATORS.
+ *
+ *  O import dinâmico é o que faz o Vite emitir um chunk separado. Login, home e
+ *  vídeo ficam estáticos de propósito: são o caminho de entrada, e adiar o
+ *  código deles só adicionaria um ida-e-volta de rede antes da primeira tela. */
+const UploadPage = lazy(() =>
+  import('@/pages/UploadPage').then((m) => ({ default: m.UploadPage })),
+)
+const AdminPage = lazy(() => import('@/pages/AdminPage').then((m) => ({ default: m.AdminPage })))
+
+/** Fallback enquanto o chunk da rota chega. Ocupa a altura de uma tela para o
+ *  layout não "pular" quando o conteúdo entra. */
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center" role="status" aria-live="polite">
+      <Spinner size={28} />
+      <span className="sr-only">Carregando…</span>
+    </div>
+  )
+}
 
 /** Toda rota privada passa por um guard.
  *
@@ -59,12 +85,26 @@ export default function App() {
 
         {/* Espelha POST /video/upload -> hasAnyRole("CREATORS","ADMIN") */}
         <Route element={<RequireCreator />}>
-          <Route path="/upload" element={<UploadPage />} />
+          <Route
+            path="/upload"
+            element={
+              <Suspense fallback={<RouteFallback />}>
+                <UploadPage />
+              </Suspense>
+            }
+          />
         </Route>
 
         {/* Espelha GET /auth/users -> hasRole("ADMIN") */}
         <Route element={<RequireAdmin />}>
-          <Route path="/admin" element={<AdminPage />} />
+          <Route
+            path="/admin"
+            element={
+              <Suspense fallback={<RouteFallback />}>
+                <AdminPage />
+              </Suspense>
+            }
+          />
         </Route>
 
         <Route path="/403" element={<ForbiddenPage />} />
