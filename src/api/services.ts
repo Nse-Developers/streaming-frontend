@@ -334,6 +334,55 @@ export const commentLikeApi = {
   },
 }
 
+/* ------------------------------------------------------------- feedback */
+
+export const feedbackApi = {
+  /** GET /feedback/getFeedbacks — avaliacoes da PLATAFORMA INTEIRA.
+   *
+   *  Sem filtro por video, sem filtro por usuario e sem paginacao: cada item
+   *  vem com o video e o usuario aninhados por completo. O proprio Swagger
+   *  avisa que a resposta fica pesada e recomenda uso administrativo.
+   *
+   *  Nao existe rota "minha avaliacao deste video", entao esta e a unica forma
+   *  de descobrir se o usuario ja avaliou algo — o filtro acontece no cliente
+   *  (ver `useMyVideoFeedback`).
+   *
+   *  Sem sessao responde 403; com sessao ADMIN, 200 (testado em 2026-08-27).
+   *  NAO foi testado com um usuario comum, entao trate 403 aqui como possivel
+   *  restricao de papel e nao como sessao expirada — e o que os hooks fazem. */
+  async listAll() {
+    const { data } = await http.get<FeedbackResponse[]>('/feedback/getFeedbacks')
+    return data ?? []
+  },
+
+  /** POST /feedback/{videoId} — avalia um video como o usuario logado.
+   *
+   *  O 409 recebe mensagem propria porque nao e falha: significa que o usuario
+   *  JA avaliou este video. A mensagem crua do backend vem em ingles e cairia
+   *  direto na tela. Para trocar a nota e preciso remover a anterior primeiro. */
+  async give(videoId: number, body: FeedbackRequest) {
+    try {
+      const { data } = await http.post<FeedbackResponse>(`/feedback/${videoId}`, body)
+      return data
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        throw new ApiError('Você já avaliou este vídeo.', 409)
+      }
+      throw error
+    }
+  },
+
+  /** DELETE /feedback/{videoId} — remove a avaliacao DO USUARIO LOGADO para
+   *  este video (nao a de outra pessoa; o backend resolve o autor pela sessao).
+   *
+   *  O parametro e o id do VIDEO, nao o id da avaliacao — diferente de
+   *  `FeedbackResponse.id`, que nao e usado em nenhuma rota. Depois de remover,
+   *  o usuario pode avaliar de novo. */
+  async remove(videoId: number) {
+    await http.delete(`/feedback/${videoId}`)
+  },
+}
+
 /* --------------------------------------------------------------- follow */
 
 export const followApi = {

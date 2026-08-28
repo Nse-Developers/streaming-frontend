@@ -215,6 +215,52 @@ export interface CommentResponse {
   likes: number
 }
 
+/** Reacao que ACOMPANHA a nota em POST /feedback/{videoId}.
+ *
+ *  Complemento da nota, nao substituto: o backend aceita o campo ausente ou
+ *  null desde que `rating` venha. Por isso ele e opcional no request. */
+export type FeedbackReactionType = 'LIKE' | 'DISLIKE'
+
+/** POST /feedback/{videoId} — a avaliacao do usuario logado para um video.
+ *
+ *  `rating` e obrigatorio e o backend valida a faixa 1..5 (fora dela, 400).
+ *  A mesma faixa esta em `feedbackSchema` (lib/validation.ts), para o erro
+ *  aparecer no formulario antes de gastar uma request.
+ *
+ *  Cada usuario avalia um video UMA vez: a segunda tentativa responde 409. E
+ *  por isso que a UI precisa saber se ja existe avaliacao antes de oferecer o
+ *  formulario — ver `useMyVideoFeedback` (hooks/useFeedback.ts). Para trocar a
+ *  nota, apaga-se a anterior (DELETE) e envia-se outra. */
+export interface FeedbackRequest {
+  /** Inteiro de 1 a 5. */
+  rating: number
+  feedbackReactionType?: FeedbackReactionType | null
+}
+
+/** Resposta de POST /feedback/{videoId} e item de GET /feedback/getFeedbacks.
+ *
+ *  Traz o video e o usuario ANINHADOS (objetos completos, nao ids) — e o unico
+ *  jeito de saber de quem e cada avaliacao, ja que nao existe rota
+ *  `/feedback/meus` nem filtro por video.
+ *
+ *  ATENCAO aos nomes fora do padrao: `data_feedBack` (snake_case com B
+ *  maiusculo) e `LastUpdate` (PascalCase) sao os nomes REAIS serializados
+ *  pelo backend, verificados ao vivo em 2026-08-27. Escrever `lastUpdate`
+ *  aqui devolve undefined em silencio, sem erro de tipo. */
+export interface FeedbackResponse {
+  id: number
+  rating: number
+  /** Data (sem hora), formato "2026-08-27". */
+  data_feedBack: string
+  /** ISO com hora. Nome em PascalCase de proposito — ver nota do tipo. */
+  LastUpdate: string
+  feedbackReactionType: FeedbackReactionType | null
+  /** Contador de versao do JPA. Nao tem uso na UI. */
+  version: number
+  videoResponse: VideoResponse
+  userResponse: UserResponse
+}
+
 export interface NumberOfFollowersResponse {
   followers: number
 }

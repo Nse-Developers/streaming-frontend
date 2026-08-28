@@ -129,6 +129,28 @@ export const commentSchema = z.object({
 })
 export type CommentValues = z.infer<typeof commentSchema>
 
+/** POST /feedback/{videoId}.
+ *
+ *  A faixa 1..5 e o inteiro espelham a validacao do backend (fora dela, 400).
+ *  Repetir aqui e o que faz o erro aparecer no formulario sem gastar request —
+ *  mesma razao dos outros schemas deste arquivo.
+ *
+ *  `feedbackReactionType` e opcional de verdade: o backend aceita ausente ou
+ *  null. `''` entra na lista porque um <select> sem escolha devolve string
+ *  vazia, e ela precisa virar undefined em vez de falhar a validacao. */
+export const feedbackSchema = z.object({
+  rating: z
+    .number({ message: 'Escolha uma nota de 1 a 5.' })
+    .int('A nota deve ser um número inteiro.')
+    .min(1, 'A nota mínima é 1.')
+    .max(5, 'A nota máxima é 5.'),
+  feedbackReactionType: z
+    .union([z.literal('LIKE'), z.literal('DISLIKE'), z.literal('')])
+    .optional()
+    .transform((value) => (value ? value : undefined)),
+})
+export type FeedbackValues = z.infer<typeof feedbackSchema>
+
 export const categorySchema = z.object({
   name: z
     .string()

@@ -53,6 +53,7 @@
      Ou seja: exatamente quem precisava ler um erro não conseguia. */
   --color-danger-ink: var(--danger-ink);
   --color-success-ink: var(--success-ink);
+  --color-star-ink: var(--star-ink);
 
   /* Cor do anel de foco, por tema. `brand-400` fixo dava só 3.0:1 sobre o
      surface-0 do tema claro — exatamente no limite da WCAG 1.4.11 para
@@ -101,6 +102,10 @@
   --danger-ink: #f87171; /* danger-400: 6.99:1 no fundo escuro */
   --success-ink: #4ade80; /* success-400: 11.10:1 no fundo escuro */
   --focus-ring-color: #2a90f5; /* brand-400: 5.90:1 sobre o surface-0 */
+  /* Estrela de avaliacao. Ambar claro: 10.89:1 sobre o surface-0 e 9.62:1
+     sobre o surface-100 (fundo do card onde a estrela aparece). O amarelo
+     "puro" (#facc15) chegava a 12.63:1, mas lia como aviso, nao como nota. */
+  --star-ink: #f5b845;
 }
 
 :root[data-theme="light"] {
@@ -138,6 +143,16 @@
   --danger-ink: #c62828;
   --success-ink: #128043;
   --focus-ring-color: #0d6fdd; /* brand-500: 4.43:1 sobre o surface-0 */
+  /* O ambar do tema escuro praticamente desaparece no fundo claro, entao aqui
+     ele vira ambar-terra. Medido nos quatro fundos em que a estrela aparece:
+       surface-100 (#ffffff, card)  6.15:1
+       surface-0   (#f2f5fa, pagina) 5.63:1
+       surface-50  (#e9eef7)         5.28:1
+       surface-200 (#dee6f2, borda)  4.89:1
+     O primeiro candidato (#9a6206) passava no branco (5.09:1) mas caia para
+     4.37:1 sobre o surface-50 — abaixo do minimo 4.5:1 da WCAG AA. Este tom
+     tem folga nos quatro. */
+  --star-ink: #8a5605;
 }
 
 html,
