@@ -12,10 +12,15 @@ import {
 import { cn } from '@/lib/cn'
 
 interface VideoPlayerProps {
-  /** URL do arquivo. Hoje a API não devolve este campo em VideoResponse. */
+  /** URL ASSINADA do arquivo, válida por 6 horas (ver GET /video/{id}).
+   *  Não guardar em cache nem tratar como permanente: quando expira, o
+   *  <video> falha e a saída é buscar o vídeo de novo — é o que `onRetry` faz. */
   src?: string | null
   poster?: string | null
   title?: string
+  /** Rebusca o vídeo na API para obter uma URL assinada nova. Sem isto, um
+   *  player aberto por mais de 6 horas fica morto até um F5 manual. */
+  onRetry?: () => void
 }
 
 /** Volume escolhido pelo usuário, lembrado entre vídeos e entre sessões.
@@ -59,7 +64,7 @@ function formatTime(seconds: number): string {
  *
  *  Quando `src` está ausente (situação atual da API), mostra a capa com um
  *  aviso claro em vez de simular uma reprodução que não existe. */
-export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
+export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -241,9 +246,24 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
           </p>
           <p className="max-w-sm text-xs leading-relaxed text-white/60">
             {failed
-              ? 'O arquivo não pôde ser carregado.'
-              : 'A API ainda não devolve a URL do arquivo de vídeo nesta resposta.'}
+              ? // A causa mais provável é o link assinado ter expirado (6 h),
+                // e não um arquivo corrompido — a mensagem aponta para a ação
+                // que resolve em vez de sugerir um problema permanente.
+                'O link de reprodução expirou ou o arquivo não pôde ser carregado.'
+              : 'Este vídeo ainda não tem arquivo disponível para reprodução.'}
           </p>
+          {failed && onRetry && (
+            <button
+              type="button"
+              onClick={() => {
+                setFailed(false)
+                onRetry()
+              }}
+              className="mt-1 min-h-11 rounded-lg px-4 text-xs font-semibold text-white underline underline-offset-4 hover:text-white/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              Tentar novamente
+            </button>
+          )}
         </div>
       </div>
     )

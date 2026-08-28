@@ -26,8 +26,13 @@ function readId(video: VideoResponse): number | undefined {
   return video.videId ?? video.video_id ?? undefined
 }
 
-/** Extrai o UUID do nome do arquivo em MinIO:
- *  ".../creators-<uuid>--thumbnails-.png" -> "<uuid>" */
+/** Extrai o UUID do nome do objeto no storage:
+ *  ".../creators-<uuid>--thumbnails-.png" -> "<uuid>"
+ *
+ *  O padrao sobreviveu a troca de MinIO por Cloudflare R2 (a chave do objeto
+ *  nao mudou, so o host): conferido em 2026-08-27 contra os 17 videos de
+ *  GET /video, todos com UUID extraido. So serve de React key quando o backend
+ *  nao manda id — hoje ele manda. */
 function thumbnailKey(url: string): string | null {
   const match = /creators-([0-9a-f-]{36})/i.exec(url)
   return match?.[1] ?? null
@@ -108,6 +113,42 @@ export function isPubliclyVisible(video: Pick<VideoResponse, 'status'>): boolean
  *  carregando). */
 export function publicVideos(videos: UiVideo[] | undefined): UiVideo[] {
   return (videos ?? []).filter(isPubliclyVisible)
+}
+
+/** Este vídeo pode ser exibido a ESTE usuário?
+ *
+ *  Complementa `isPubliclyVisible`, que decide o que entra numa LISTA. Aqui a
+ *  pergunta é sobre um vídeo específico já carregado — o caso da tela de
+ *  detalhe, onde o vídeo vem de `GET /video/{id}` e não passa por filtro algum.
+ *
+ *  Estado do backend em 2026-08-27 (reverificado — MUDOU desde 2026-08-23):
+ *   - para um usuário comum, `GET /video/{id}` já responde 404 em vídeo
+ *     PRIVATE/DRAFT de terceiro. A falha original foi corrigida lá;
+ *   - para ADMIN, a rota AINDA devolve 200 com o vídeo e a URL assinada de
+ *     reprodução de qualquer criador (testado com os ids 3 e 6, de outros
+ *     donos). O feed (`GET /video`) tem o mesmo comportamento: filtra para
+ *     usuário comum, mas entrega rascunho e privado alheios ao admin.
+ *
+ *  Por isso a função CONTINUA necessária, e a regra é posse — não papel: um
+ *  admin ter permissão administrativa não é razão para o player abrir o
+ *  rascunho não publicado de outra pessoa. Sem isto, `/videos/3` reproduziria
+ *  para o admin um vídeo que o dono nunca publicou.
+ *
+ *  Não é controle de acesso (o dado já chegou ao navegador), e sim recusa de
+ *  exibir o que não deveria ter sido enviado. Quando a rota parar de entregar
+ *  PRIVATE/DRAFT de terceiros também ao admin, isto vira redundante. */
+export function canView(
+  video: Pick<VideoResponse, 'status' | 'userId'>,
+  viewerId: number | null | undefined,
+): boolean {
+  if (isPubliclyVisible(video)) return true
+  // Só o dono vê o que não é público. `userId` ausente (backend antigo) não
+  // permite provar posse — nega, que é o lado seguro do erro.
+  return (
+    typeof video.userId === 'number' &&
+    typeof viewerId === 'number' &&
+    video.userId === viewerId
+  )
 }
 
 export const STATUS_LABEL: Record<string, string> = {

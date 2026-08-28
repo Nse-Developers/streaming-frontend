@@ -2,9 +2,11 @@ import { Link, useParams } from 'react-router-dom'
 import { Share2, Compass, ServerCrash } from 'lucide-react'
 import { useVideo, useVideos } from '@/hooks/useVideos'
 import { useToast } from '@/context/ToastContext'
+import { useAuth } from '@/context/AuthContext'
 import { VideoPlayer } from '@/components/video/VideoPlayer'
 import { VideoCard } from '@/components/video/VideoCard'
 import { CommentSection } from '@/components/video/CommentSection'
+import { RatingSection } from '@/components/video/RatingSection'
 import { Avatar } from '@/components/ui/Avatar'
 import { UserLink, UserAvatarLink } from '@/components/user/UserLink'
 import { FollowButton } from '@/components/user/FollowButton'
@@ -16,16 +18,17 @@ import { Badge } from '@/components/ui/Badge'
 import { toErrorMessage } from '@/api/client'
 import { safeExternalUrl } from '@/lib/validation'
 import { formatViews, formatRelativeDate } from '@/lib/format'
-import { STATUS_LABEL } from '@/lib/video'
+import { STATUS_LABEL, canView } from '@/lib/video'
 
 export function VideoPage() {
   const { id } = useParams<{ id: string }>()
   const videoId = Number(id)
   const isValidId = Number.isInteger(videoId) && videoId > 0
 
-  const { data: video, isLoading, isError, error } = useVideo(videoId)
+  const { data: video, isLoading, isError, error, refetch } = useVideo(videoId)
   const { data: allVideos } = useVideos()
   const { showToast } = useToast()
+  const { user } = useAuth()
 
   const share = async () => {
     const url = window.location.href
@@ -84,7 +87,13 @@ export function VideoPage() {
     )
   }
 
-  if (isError || !video) {
+  // O backend entrega PRIVATE/DRAFT de terceiros nesta rota (ver `canView`).
+  // Tratado como "não encontrado", e não como um 403 explícito: dizer "sem
+  // permissão" confirmaria a existência do vídeo naquele id para quem está
+  // sondando. A mesma tela do id inexistente não revela nada.
+  const blocked = Boolean(video) && !canView(video!, user?.id)
+
+  if (isError || !video || blocked) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
         <EmptyState
@@ -113,7 +122,14 @@ export function VideoPage() {
     <div className="mx-auto max-w-[1600px] px-4 pb-16 pt-4 sm:px-6 sm:pt-6">
       <div className="grid gap-8 min-[880px]:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
-          <VideoPlayer src={safeExternalUrl(video.videoUrl)} poster={poster} title={video.tittle} />
+          <VideoPlayer
+            src={safeExternalUrl(video.videoUrl)}
+            poster={poster}
+            title={video.tittle}
+            // Refetch da query do vídeo: traz uma URL assinada nova quando a
+            // anterior expira (6 h). `refetch` já ignora o staleTime.
+            onRetry={() => void refetch()}
+          />
 
           <h1 className="mt-4 font-display text-lg font-extrabold leading-snug tracking-tight text-surface-900 sm:text-2xl">
             {video.tittle}
@@ -129,8 +145,8 @@ export function VideoPage() {
           </div>
 
           {/* Ações: criador à esquerda, compartilhar à direita.
-              Curtir/não curtir sai daqui enquanto a avaliação está em standby
-              (feature a implementar; ver PENDENCIAS.md). */}
+              Curtir/não curtir NÃO fica aqui: a reação é parte da avaliação
+              (POST /feedback), junto da nota — ver RatingSection abaixo. */}
           <div className="mt-4 flex flex-col gap-3 border-y border-surface-200 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <UserAvatarLink userId={video.userId} name={video.creatorName}>
@@ -172,6 +188,8 @@ export function VideoPage() {
               </p>
             </div>
           )}
+
+          <RatingSection videoId={videoId} />
 
           <CommentSection videoId={videoId} />
         </div>
