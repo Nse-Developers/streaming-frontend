@@ -297,10 +297,24 @@ export const commentApi = {
     return data
   },
 
-  /** ATENÇÃO: o path diz {videoId} e o backend apaga por vídeo, não por
-   *  comentário — por isso a UI não expõe "excluir comentário" individual. */
-  async removeByVideo(videoId: number) {
-    const { data } = await http.delete<DeletedResponse>(`/comments/${videoId}`)
+  /** DELETE /comments/{videoId} — apesar do nome do parâmetro na URL, o valor
+   *  esperado é o **id do COMENTÁRIO** (`commentId` da listagem), não o id do
+   *  vídeo. Isso está documentado explicitamente no Swagger do backend
+   *  (verificado em 2026-08-27); a leitura anterior aqui era a oposta e apagaria
+   *  o comentário errado se alguma tela tivesse chamado isto.
+   *
+   *  NÃO ESTÁ LIGADO A NENHUMA TELA, e de propósito: ao testar ao vivo com um
+   *  comentário do PRÓPRIO usuário logado (ADMIN), a rota respondeu
+   *  404 "Comment not found" mesmo com o comentário existindo na listagem. Ou
+   *  seja: o contrato documentado e o comportamento real ainda não batem, e
+   *  qual dos dois está certo é questão do backend.
+   *
+   *  Enquanto isso não se resolver, expor "excluir comentário" na UI daria um
+   *  botão que só produz erro. O nome do parâmetro (`commentId`) segue o
+   *  contrato documentado para que, quando o 404 for corrigido, ligar a UI seja
+   *  só chamar isto — sem ter que redescobrir qual id vai na URL. */
+  async removeComment(commentId: number) {
+    const { data } = await http.delete<DeletedResponse>(`/comments/${commentId}`)
     return data
   },
 }

@@ -212,7 +212,6 @@ export interface CommentResponse {
    *  razão de `VideoResponse.userId`. */
   userId?: number
   dataComment: string
-  version: number
   likes: number
 }
 
