@@ -139,17 +139,52 @@ export interface VideoResponse {
   status: VideoStatus
 }
 
+/** Campo `metadata` de POST /video/upload-url.
+ *
+ *  Vai como STRING JSON dentro do multipart (não como objeto) — a API
+ *  desserializa o texto. Ver `videoApi.requestUploadUrl`.
+ *
+ *  Mudou junto com a arquitetura de upload (2026-08-23): o DTO antigo tinha
+ *  `titulo`, `language` e `status`. Nenhum dos três existe mais aqui:
+ *   - `title` agora é em inglês e sem o "t" dobrado do VideoResponse;
+ *   - `status` saiu porque o vídeo nasce sempre DRAFT e só ganha status real
+ *     no passo 3 (confirm), depois que o arquivo comprovadamente chegou;
+ *   - `language` deixou de ser aceito.
+ *
+ *  `contentType` NÃO é decorativo: ele entra na assinatura da URL e precisa ser
+ *  byte a byte igual ao `Content-Type` do PUT do passo 2, senão o storage
+ *  recusa com SignatureDoesNotMatch. */
 export interface VideoUploadMetadata {
-  titulo: string
+  title: string
   description: string
-  status: VideoStatus
-  language: string
+  /** Qualquer `video/*`. Define a extensão do objeto salvo no storage. */
+  contentType: string
+}
+
+/** Resposta de POST /video/upload-url — o passo 1 dos três do upload.
+ *
+ *  `uploadUrl` é uma URL ASSINADA do storage, válida por 15 minutos, e é o
+ *  destino do PUT do passo 2. Ela não aponta para a API: não mandar cookie
+ *  nem X-XSRF-TOKEN nesse PUT (ver `videoApi.putToStorage`). */
+export interface VideoUploadResponse {
+  uploadUrl: string
+  /** Id do vídeo criado como DRAFT — é o `{id}` de POST /video/{id}/confirm. */
+  videoId: number
+  /** Chave do objeto no storage. Informativo; o front não precisa dela. */
+  videoKey: string
 }
 
 export interface VideoUpdateStatusRequest {
   id: number
   videoStatus: VideoStatus
 }
+
+/** Status aceitos ao CONFIRMAR um upload (POST /video/{id}/confirm).
+ *
+ *  Recorte proposital de VideoStatus: o vídeo já está em DRAFT quando chega
+ *  aqui, PROCESSING é reservado ao servidor e DELETED tem rota própria. Deixar
+ *  o tipo largo permitiria uma tela oferecer uma opção que o backend recusa. */
+export type VideoConfirmStatus = Extract<VideoStatus, 'PUBLISHED' | 'PRIVATE'>
 
 export interface CategoryRequest {
   name: string

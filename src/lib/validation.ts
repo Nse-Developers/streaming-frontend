@@ -152,13 +152,21 @@ export type CategoryValues = z.infer<typeof categorySchema>
 /* --------------------------------------------------------------- upload */
 
 export const MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024 // 2 GB (backend)
-export const MAX_THUMB_BYTES = 15 * 1024 * 1024 // 15 MB (backend)
+/** 2 MB — limite da API para a thumbnail (413 acima disso).
+ *
+ *  Era 15 MB enquanto o vídeo também subia pela API. Com o vídeo indo direto ao
+ *  storage, a thumbnail é a única coisa que passa pelo Spring e o limite dele
+ *  ficou apertado. Ultrapassar aqui gasta o upload inteiro para colher 413. */
+export const MAX_THUMB_BYTES = 2 * 1024 * 1024
 
 export const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska']
 export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif']
 
 export const uploadSchema = z.object({
-  titulo: z
+  // `title` (inglês, um "t") é o nome que POST /video/upload-url espera no
+  // metadata. Não confundir com `tittle`, o nome do MESMO dado na LEITURA
+  // (VideoResponse). A API é inconsistente entre escrita e leitura.
+  title: z
     .string()
     .transform(oneLine)
     .pipe(z.string().min(3, 'Mínimo de 3 caracteres.').max(120, 'Máximo de 120 caracteres.')),
@@ -166,8 +174,12 @@ export const uploadSchema = z.object({
     .string()
     .transform(multiLine)
     .pipe(z.string().min(10, 'Descreva o vídeo em pelo menos 10 caracteres.').max(2000, 'Máximo de 2000 caracteres.')),
-  // `language` não está aqui de propósito: não é escolhido pelo usuário, o
-  // envio manda PT-BR fixo (ver UploadPage).
+  // `language` saiu junto com a arquitetura nova: o metadata de
+  // /video/upload-url não aceita mais esse campo.
+  //
+  // `status` continua no formulário, mas não vai no metadata: ele é aplicado
+  // no passo 3 (confirm). DRAFT é o estado inicial de todo vídeo, e escolhê-lo
+  // significa apenas não confirmar.
   status: z.enum(['PUBLISHED', 'DRAFT', 'PRIVATE']),
 })
 export type UploadValues = z.infer<typeof uploadSchema>
@@ -179,7 +191,10 @@ export function validateVideoFile(file: File | null): string | null {
   if (!file) return 'Selecione o arquivo de vídeo.'
   if (file.size === 0) return 'O arquivo está vazio.'
   if (file.size > MAX_VIDEO_BYTES) return 'O vídeo passa de 2 GB.'
-  if (file.type && !ACCEPTED_VIDEO_TYPES.includes(file.type)) {
+  // Sem `file.type &&`: um tipo vazio não é mais tolerável. O contentType é
+  // obrigatório no passo 1 e precisa ser video/*, então um arquivo cuja
+  // extensão também não resolve tem de ser barrado ANTES do upload.
+  if (!resolveVideoContentType(file)) {
     return 'Formato não aceito. Use MP4, WebM, MOV ou MKV.'
   }
   return null
@@ -188,11 +203,34 @@ export function validateVideoFile(file: File | null): string | null {
 export function validateThumbnailFile(file: File | null): string | null {
   if (!file) return 'Selecione a imagem de capa.'
   if (file.size === 0) return 'O arquivo está vazio.'
-  if (file.size > MAX_THUMB_BYTES) return 'A imagem passa de 15 MB.'
+  if (file.size > MAX_THUMB_BYTES) return 'A imagem passa de 2 MB.'
   if (file.type && !ACCEPTED_IMAGE_TYPES.includes(file.type)) {
     return 'Formato não aceito. Use JPG, PNG, WebP ou AVIF.'
   }
   return null
+}
+
+/** Content-Type a declarar para um arquivo de vídeo.
+ *
+ *  Existe porque o `contentType` entra na ASSINATURA da URL de upload: se o
+ *  passo 1 declarar um valor e o PUT do passo 2 mandar outro, o storage recusa
+ *  com SignatureDoesNotMatch. Resolver isso num lugar só garante que os dois
+ *  passos usem exatamente a mesma string.
+ *
+ *  `file.type` vem vazio quando o SO não reconhece a extensão (acontece com
+ *  .mkv em algumas máquinas Windows). Nesse caso o navegador mandaria
+ *  `application/octet-stream` no PUT, que não é `video/*` e leva a 400 no passo
+ *  1 — então derivamos da extensão, e só aí desistimos. */
+export function resolveVideoContentType(file: File): string | null {
+  if (file.type && ACCEPTED_VIDEO_TYPES.includes(file.type)) return file.type
+  const byExtension: Record<string, string> = {
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    mov: 'video/quicktime',
+    mkv: 'video/x-matroska',
+  }
+  const extension = file.name.split('.').pop()?.toLowerCase() ?? ''
+  return byExtension[extension] ?? null
 }
 
 /** Só devolve URLs http(s) ABSOLUTAS — usada antes de jogar valor vindo da API
@@ -202,7 +240,7 @@ export function validateThumbnailFile(file: File | null): string | null {
  *  `new URL(value, window.location.origin)`, dois valores indesejados passavam:
  *  um caminho relativo (`/x`) virava uma URL da PRÓPRIA origem, e uma URL
  *  protocol-relative (`//evil.com/x`) era promovida a `https://evil.com/x`
- *  silenciosamente. Os quatro pontos de uso (thumbnail e vídeo do MinIO,
+ *  silenciosamente. Os quatro pontos de uso (thumbnail e vídeo do storage,
  *  Instagram e YouTube do perfil) recebem sempre URL absoluta, então exigir o
  *  esquema não perde nenhum caso legítimo e mantém a função alinhada ao
  *  `isHttpUrl` de lib/video.ts, que já era estrito. */

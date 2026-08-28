@@ -1,9 +1,13 @@
+import axios from 'axios'
 import { ApiError, http } from './client'
+import { safeExternalUrl } from '@/lib/validation'
 import type {
   CategoryRequest,
   CategoryResponse,
   CommentResponse,
   CreatedResponse,
+  FeedbackRequest,
+  FeedbackResponse,
   DeletedResponse,
   FollowResponse,
   NumberOfFollowersResponse,
@@ -14,8 +18,10 @@ import type {
   UserResponse,
   UserUpdateRequest,
   VideoResponse,
+  VideoConfirmStatus,
   VideoStatus,
   VideoUploadMetadata,
+  VideoUploadResponse,
 } from './types'
 
 /* ---------------------------------------------------------------- auth */
@@ -126,32 +132,116 @@ export const videoApi = {
     return data
   },
 
-  /** O backend espera `metadata` como STRING JSON na query, e os arquivos como
-   *  multipart. Os dois arquivos são obrigatórios (sem thumbnail => 400). */
-  async upload(
-    metadata: VideoUploadMetadata,
-    file: File,
-    thumbnail: File,
-    onProgress?: (percent: number) => void,
-  ) {
+  /** Passo 1 de 3 — pede a URL assinada e sobe a THUMBNAIL (só ela passa pela
+   *  API). O vídeo nasce `DRAFT` e fica invisível até o passo 3.
+   *
+   *  `metadata` vai como string JSON num campo do multipart, não como objeto:
+   *  a API lê o campo como texto e desserializa. */
+  async requestUploadUrl(metadata: VideoUploadMetadata, thumbnail: File) {
     const form = new FormData()
-    form.append('file', file)
     form.append('thumbnail', thumbnail)
+    form.append('metadata', JSON.stringify(metadata))
 
-    const { data } = await http.post<CreatedResponse>('/video/upload', form, {
-      params: { metadata: JSON.stringify(metadata) },
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 0, // upload de vídeo pode ser longo; sem timeout artificial
-      onUploadProgress: (event) => {
-        if (!onProgress || !event.total) return
-        onProgress(Math.round((event.loaded * 100) / event.total))
-      },
+    const { data } = await http.post<VideoUploadResponse>('/video/upload-url', form, {
+      // Sem Content-Type explícito: o browser precisa gerar o boundary do
+      // multipart sozinho. Fixar 'multipart/form-data' na mão omite o
+      // boundary e o Spring não consegue separar as partes.
+      headers: { 'Content-Type': undefined },
     })
     return data
   },
 
+  /** Passo 2 de 3 — manda o arquivo DIRETO ao storage, sem passar pela API.
+   *
+   *  Usa um axios cru (`axios.put`), não a instância `http`, por três motivos
+   *  que são de segurança, não de estilo:
+   *
+   *  1. `http` tem `withCredentials: true`. Esta URL é de outro host (o
+   *     storage), então o cookie de sessão `byou_session` seria enviado a um
+   *     serviço que não é a API — vazamento de credencial para fora do
+   *     destinatário pretendido, e quebra do CORS de quebra.
+   *  2. `http` tem `baseURL` e `xsrfHeaderName`. O token CSRF não tem uso no
+   *     storage e vira só mais um header a estourar o preflight.
+   *  3. O `Content-Type` aqui é parte da ASSINATURA da URL. Precisa ser
+   *     idêntico ao `contentType` enviado no metadata do passo 1 — por isso
+   *     ele é parâmetro explícito, e não `file.type` lido de novo aqui: os
+   *     dois passos têm que concordar sobre uma única string.
+   *
+   *  Sem timeout: o arquivo pode ter gigabytes numa conexão lenta. */
+  async putToStorage(
+    uploadUrl: string,
+    file: File,
+    contentType: string,
+    onProgress?: (percent: number) => void,
+    signal?: AbortSignal,
+  ) {
+    // A URL vem da resposta da API, mas é o único lugar do app onde um valor
+    // do servidor vira o DESTINO de uma request com conteúdo do usuário — em
+    // todos os outros ele só vira src/href. Um valor inesperado aqui manda o
+    // arquivo para outro host, então o formato é conferido antes do envio:
+    //
+    //  - só http(s): descarta esquemas que não deveriam chegar aqui;
+    //  - em produção, só https: um downgrade para http faria o vídeo e a
+    //    assinatura da URL (que é uma credencial temporária) trafegarem em
+    //    claro. Em dev o storage local roda em http, por isso a exceção.
+    const parsed = safeExternalUrl(uploadUrl)
+    if (!parsed || (!import.meta.env.DEV && !parsed.startsWith('https://'))) {
+      throw new ApiError('O servidor devolveu um destino de upload inválido.', 0)
+    }
+
+    try {
+      await axios.put(parsed, file, {
+        headers: { 'Content-Type': contentType },
+        withCredentials: false,
+        timeout: 0,
+        signal,
+        onUploadProgress: (event) => {
+          if (!onProgress || !event.total) return
+          onProgress(Math.round((event.loaded * 100) / event.total))
+        },
+      })
+    } catch (error) {
+      // Este `axios.put` é cru de propósito (ver acima), então NÃO passa pelo
+      // interceptor de `http` — sem este catch, o erro chegaria à tela como
+      // "Request failed with status code 403" em inglês, ou pior: o corpo de
+      // erro do storage (S3/R2) é um XML que expõe bucket, chave do objeto e endpoint do
+      // storage. Nada disso deve virar texto na tela do usuário.
+      if (axios.isCancel(error)) throw new ApiError('Envio cancelado.', 0)
+      const status = axios.isAxiosError(error) ? (error.response?.status ?? 0) : 0
+      throw new ApiError(
+        status === 403
+          ? // 403 aqui é assinatura inválida ou URL vencida (15 min), nunca
+            // permissão do usuário — a ação certa é refazer o envio, não pedir
+            // acesso a alguém.
+            'O link de envio expirou. Tente enviar o vídeo novamente.'
+          : 'Falha ao enviar o arquivo de vídeo. Verifique sua conexão e tente novamente.',
+        status,
+      )
+    }
+  },
+
+  /** Passo 3 de 3 — confirma que o arquivo chegou e aplica o status final.
+   *
+   *  A API vai ao storage checar que o objeto existe; se não achar, o vídeo
+   *  continua DRAFT. É essa checagem que impede um vídeo sem arquivo aparecer
+   *  no catálogo, então chamar isto só depois de o PUT retornar 200.
+   *
+   *  `DRAFT` não é aceito aqui (o vídeo já está nele) — ver `VideoConfirmStatus`. */
+  async confirmUpload(id: number, videoStatus: VideoConfirmStatus) {
+    const { data } = await http.post<CreatedResponse>(`/video/${id}/confirm`, {
+      id,
+      videoStatus,
+    })
+    return data
+  },
+
+  /** Troca o status de um vídeo JÁ confirmado (ex.: tirar do ar).
+   *
+   *  Não serve para o fluxo de upload — ali o status vem do confirm. Aqui o
+   *  `id` vai no CORPO, não na URL, ao contrário do confirm. O backend recusa
+   *  com 409 a ida para DELETED/PROCESSING ou para o status atual. */
   async updateStatus(id: number, videoStatus: VideoStatus) {
-    const { data } = await http.patch<CreatedResponse>('/video/update/status', {
+    const { data } = await http.patch<VideoResponse>('/video/update/status', {
       id,
       videoStatus,
     })
