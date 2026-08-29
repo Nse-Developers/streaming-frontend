@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { authApi } from '@/api/services'
 import { ApiError, onUnauthorized } from '@/api/client'
 import type {
@@ -84,6 +85,7 @@ function toAuthUser(response: UserResponse): AuthUser {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isReady, setIsReady] = useState(false)
+  const queryClient = useQueryClient()
 
   /** Pergunta ao servidor quem está logado agora, a partir do cookie que o
    *  navegador já anexou sozinho. 401/403 (ou qualquer erro que não seja de
@@ -123,6 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       await authApi.login({ email, password })
+      // Troca de sessão no mesmo navegador: descarta o cache da sessão
+      // anterior ANTES de assumir a nova. Sem isto, chaves sem identidade de
+      // usuário (['videos'], ['users'], ['comments', id]) serviriam ao novo
+      // usuário o que o anterior carregou.
+      queryClient.clear()
       // O login não devolve o usuário no corpo (só o Set-Cookie) — busca em
       // seguida. Se isto falhar, o cookie não pegou por algum motivo (bloqueio
       // de terceiros, CSRF mal configurado etc.) e é melhor avisar já.
@@ -134,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )
       }
     },
-    [refreshUser],
+    [refreshUser, queryClient],
   )
 
   const register = useCallback(
@@ -155,8 +162,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // o objetivo é o usuário sair da área logada, o cookie HttpOnly quem
       // decide se de fato foi revogado no servidor.
       setUser(null)
+      // E descarta TODO o cache de dados da sessão. `setUser(null)` só apaga
+      // quem está logado; as respostas já buscadas continuavam vivas no
+      // QueryClient (gcTime padrão de 5 min) e o logout é navegação SPA, sem
+      // reload que as apagasse. Num computador compartilhado, o próximo a
+      // entrar recebia do cache o feed, os comentários e — para um admin que
+      // passou por /admin — a lista de usuários com os e-mails de todos.
+      queryClient.clear()
     }
-  }, [])
+  }, [queryClient])
 
   const value = useMemo<AuthContextValue>(() => {
     const isAdmin = user?.userAuth === 'ADMIN'

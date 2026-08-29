@@ -24,7 +24,7 @@ import { toErrorMessage } from '@/api/client'
 import { safeExternalUrl } from '@/lib/validation'
 import { formatLongDateBR } from '@/lib/format'
 import type { PublicUserResponse } from '@/api/types'
-import type { UiVideo } from '@/lib/video'
+import { publicVideos, type UiVideo } from '@/lib/video'
 
 const ACCOUNT_LABEL = { CREATORS: 'Criador', VIEWERS: 'Espectador' } as const
 
@@ -298,9 +298,9 @@ function PublicVideos({
     )
   }
 
-  const mine: UiVideo[] = (videos ?? []).filter(
-    (video) => video.status === 'PUBLISHED' && video.userId === userId,
-  )
+  // Só o que é público E é desta pessoa. O recorte de visibilidade vem de
+  // lib/video.ts, para não repetir a regra em cada tela.
+  const mine: UiVideo[] = publicVideos(videos).filter((video) => video.userId === userId)
 
   if (mine.length === 0) {
     return (
