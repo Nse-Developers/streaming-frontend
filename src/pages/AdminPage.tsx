@@ -66,7 +66,12 @@ export function AdminPage() {
         </p>
       </header>
 
-      <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* As seis métricas numa grade só. Eram duas faixas de `sm:grid-cols-4`,
+          a segunda com apenas dois cards — que a partir de `sm` ocupavam duas
+          das quatro colunas e deixavam metade da linha vazia, como se dois
+          cards tivessem falhado ao carregar. Em 3 colunas os seis fecham duas
+          linhas cheias; em 2 (mobile), três linhas cheias. */}
+      <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <Metric label="Usuários" value={users.data?.length} icon={UsersIcon} loading={users.isLoading} />
         <Metric label="Vídeos" value={videos.data?.length} icon={Film} loading={videos.isLoading} />
         <Metric
@@ -81,12 +86,10 @@ export function AdminPage() {
           icon={Tag}
           loading={categories.isLoading}
         />
-      </div>
 
-      {/* Segunda faixa de metricas: a nota media da plataforma so faz sentido
-          ao lado do total de avaliacoes — uma media de 5,0 vinda de UMA
-          avaliacao nao diz o mesmo que a mesma media vinda de duzentas. */}
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* A nota media da plataforma so faz sentido ao lado do total de
+            avaliacoes — uma media de 5,0 vinda de UMA avaliacao nao diz o
+            mesmo que a mesma media vinda de duzentas. */}
         <Metric
           label="Avaliações"
           value={feedbacks.data?.length}
@@ -739,7 +742,15 @@ function FeedbacksSection() {
       {!isLoading && !isError && total > 0 && (
         <ul className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-surface-100">
           {shown.map((feedback) => (
-            <li key={feedback.id} className="flex items-center gap-3 p-3">
+            // `flex-wrap` como nas outras seções (usuários e vídeos já fazem
+            // isso): sem ele o avatar e a nota, ambos `shrink-0`, espremiam
+            // toda a compressão na coluna do meio — e as duas linhas dela são
+            // `truncate`, então a 320px a data sumia primeiro, justamente o
+            // campo por onde a lista é ordenada.
+            <li
+              key={feedback.id}
+              className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4"
+            >
               <Avatar
                 name={`${feedback.userResponse?.name ?? ''} ${feedback.userResponse?.surname ?? ''}`.trim()}
                 className="h-9 w-9 shrink-0 text-xs"

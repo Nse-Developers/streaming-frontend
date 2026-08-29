@@ -9,6 +9,7 @@ import {
   Minimize,
   VideoOff,
 } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/cn'
 
 interface VideoPlayerProps {
@@ -77,6 +78,11 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [failed, setFailed] = useState(false)
+  /** Vídeo parado esperando rede. Sem isto, um stream que engasga no meio
+   *  mostrava só um quadro congelado: nada distinguia "carregando" de
+   *  "travou". `onWaiting`/`onPlaying` são os eventos que o próprio elemento
+   *  emite ao esvaziar e reabastecer o buffer. */
+  const [isBuffering, setIsBuffering] = useState(false)
 
   useEffect(() => {
     const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -373,7 +379,26 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
         }}
         onError={() => setFailed(true)}
         onEnded={() => setIsPlaying(false)}
+        onWaiting={() => setIsBuffering(true)}
+        onPlaying={() => {
+          setIsBuffering(false)
+          setIsPlaying(true)
+        }}
+        onCanPlay={() => setIsBuffering(false)}
       />
+
+      {/* Só enquanto o vídeo tenta tocar: parado por pausa não é buffer.
+          `pointer-events-none` para não roubar o clique de play/pause do
+          próprio vídeo, que ocupa a mesma área. */}
+      {isBuffering && isPlaying && (
+        <div
+          className="pointer-events-none absolute inset-0 flex items-center justify-center"
+          role="status"
+        >
+          <Spinner size={34} className="text-white" />
+          <span className="sr-only">Carregando o vídeo…</span>
+        </div>
+      )}
 
       {!isPlaying && (
         <button
@@ -399,7 +424,14 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
         )}
       >
         <div
-          className="group/bar relative mb-1 h-4 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          // A faixa clicável media 16px de altura. O trilho VISÍVEL tem 4px e
+          // fica centrado nela, então a área extra já era só folga de clique —
+          // mas 16px continua metade do alvo mínimo de toque, e num celular
+          // errar a barra de progresso significa tocar o vídeo e pausá-lo.
+          // No toque a folga sobe para 44px; o trilho desenhado não muda de
+          // tamanho (é o filho absoluto, centrado por `top-1/2`), então no
+          // ponteiro fino a aparência segue idêntica.
+          className="group/bar relative mb-1 h-4 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 max-sm:h-11"
           onClick={seek}
           role="slider"
           tabIndex={0}
@@ -567,7 +599,11 @@ function ControlButton({
       aria-label={label}
       aria-keyshortcuts={keyShortcut}
       title={keyShortcut ? `${label} (${keyShortcut.toUpperCase()})` : label}
-      className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-white/15 focus-ring"
+      // 40px não alcançava o mínimo de toque de 44px, e estes botões ficam a
+      // 2px um do outro no mobile (`gap-0.5`) — errar o "silenciar" e acertar
+      // "tela cheia" era fácil. Mesma regra do Button `sm`: a área cresce só no
+      // toque, o desenho de 40px continua no ponteiro fino.
+      className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-white/15 focus-ring max-sm:h-11 max-sm:w-11"
     >
       {children}
     </button>

@@ -36,7 +36,7 @@ const AdminPage = lazy(() => import('@/pages/AdminPage').then((m) => ({ default:
  *  layout não "pular" quando o conteúdo entra. */
 function RouteFallback() {
   return (
-    <div className="flex min-h-[60vh] items-center justify-center" role="status" aria-live="polite">
+    <div className="flex min-h-[60dvh] items-center justify-center" role="status" aria-live="polite">
       <Spinner size={28} />
       <span className="sr-only">Carregando…</span>
     </div>

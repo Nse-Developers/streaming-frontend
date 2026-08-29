@@ -91,6 +91,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({ showToast }), [showToast])
 
+  /** As duas regiões ficavam em `bottom-0`, a mesma borda que a BottomNav fixa
+   *  ocupa no mobile — o toast nascia ATRÁS da barra de navegação (z-100 contra
+   *  z-40 só resolve a pilha, não a sobreposição: o texto ficava coberto).
+   *  Abaixo de `lg` o piso sobe a altura da barra (56px) mais a faixa de gestos
+   *  do aparelho; a partir de `lg` a BottomNav some e o toast volta ao rodapé.
+   *  `bottom-0` continua na classe porque `lg:bottom-0` precisa de algo para
+   *  sobrescrever. */
+  const viewportClass =
+    'pointer-events-none fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-[100] flex flex-col items-center gap-2 p-4 lg:bottom-0 sm:items-end sm:p-6'
+
+
   return (
     <ToastContext.Provider value={value}>
       {children}
@@ -104,7 +115,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div
         aria-live="polite"
         aria-atomic="false"
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 p-4 sm:items-end sm:p-6"
+        className={viewportClass}
       >
         {toasts
           .filter((toast) => toast.variant !== 'error')
@@ -121,7 +132,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div
         role="alert"
         aria-live="assertive"
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex flex-col items-center gap-2 p-4 sm:items-end sm:p-6"
+        className={viewportClass}
       >
         {toasts
           .filter((toast) => toast.variant === 'error')

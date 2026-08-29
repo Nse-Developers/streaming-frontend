@@ -18,7 +18,7 @@ function GuardShell({
 
   if (!isReady) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center" role="status" aria-live="polite">
+      <div className="flex min-h-[60dvh] items-center justify-center" role="status" aria-live="polite">
         <Spinner size={28} />
         <span className="sr-only">Verificando sua sessão…</span>
       </div>
@@ -73,7 +73,7 @@ export function RedirectIfAuthenticated({ children }: { children: React.ReactNod
 
   if (!isReady) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-surface-0">
+      <div className="flex min-h-dvh items-center justify-center bg-surface-0">
         <Spinner size={28} />
       </div>
     )

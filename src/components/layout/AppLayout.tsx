@@ -17,7 +17,7 @@ export function AppLayout({ withSearch = false }: { withSearch?: boolean }) {
     : undefined
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-dvh">
       {/* Sem isto, chegar ao primeiro vídeo por teclado exigia atravessar a
           sidebar inteira mais logo, busca, tema e avatar — em CADA navegação.
           Invisível até receber foco. */}

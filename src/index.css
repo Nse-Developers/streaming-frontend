@@ -207,6 +207,20 @@ body {
   .skeleton::after {
     animation: none;
   }
+
+  /* As animações já eram cortadas acima, mas o DESLOCAMENTO continuava vindo
+     das transições de `transform`: a capa do destaque crescia 3% no hover, o
+     botão de play do player 5%, e a seta do formulário girava. Transição não é
+     animação — não era pega pela regra acima, e é exatamente o tipo de
+     movimento que incomoda quem pediu menos.
+     Só `transform` é zerado. As transições de COR seguem valendo (o `body`
+     depende delas para trocar de tema sem piscar) porque não deslocam nada. */
+  *,
+  *::before,
+  *::after {
+    transition-property: color, background-color, border-color, outline-color,
+      text-decoration-color, fill, stroke, opacity, box-shadow !important;
+  }
 }
 
 @keyframes toast-in {

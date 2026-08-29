@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   Compass,
@@ -105,7 +106,7 @@ export function UserProfilePage() {
         <Avatar name={fullName} className="h-16 w-16 text-xl sm:h-20 sm:w-20 sm:text-2xl" />
 
         <div className="min-w-0 flex-1">
-          <h1 className="font-display text-2xl font-extrabold tracking-tight text-surface-900 sm:text-3xl">
+          <h1 className="break-words font-display text-2xl font-extrabold tracking-tight text-surface-900 sm:text-3xl">
             {fullName}
           </h1>
 
@@ -169,7 +170,10 @@ function BackLink() {
   return (
     <Link
       to="/"
-      className="inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-surface-600 transition-colors hover:text-surface-900 focus-ring"
+      // Sem padding nenhum, o alvo era a altura da própria linha de texto
+      // (~20px) — e é o primeiro controle do topo da página. O `-ml-2`
+      // compensa o padding novo para o texto continuar alinhado à margem.
+      className="-ml-2 inline-flex items-center gap-1.5 rounded-md px-2 py-2 text-sm font-medium text-surface-600 transition-colors hover:text-surface-900 focus-ring max-sm:min-h-[44px]"
     >
       <ArrowLeft size={15} />
       Voltar
@@ -228,7 +232,7 @@ function SocialLinks({ user }: { user: PublicUserResponse }) {
           // noreferrer junto de noopener: sem ele a página aberta consegue
           // manipular esta aba pelo window.opener.
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-full bg-surface-200 px-3 py-1.5 text-xs font-semibold text-surface-700 transition-colors hover:bg-surface-300 hover:text-surface-900 focus-ring"
+          className="inline-flex items-center gap-1.5 rounded-full bg-surface-200 px-3 py-1.5 text-xs font-semibold text-surface-700 transition-colors hover:bg-surface-300 hover:text-surface-900 focus-ring max-sm:min-h-[44px] max-sm:px-4"
         >
           <Icon size={14} />
           {label}
@@ -253,6 +257,8 @@ function SocialLinks({ user }: { user: PublicUserResponse }) {
  *  O casamento é por `userId` (devolvido desde 2026-08-16), não por nome:
  *  nomes se repetem, e filtrar por texto misturaria os vídeos de dois
  *  homônimos na página de um só. */
+const PAGE_SIZE = 12
+
 function PublicVideos({
   userId,
   firstName,
@@ -263,6 +269,10 @@ function PublicVideos({
   isCreator: boolean
 }) {
   const { data: videos, isLoading, isError, error, refetch, isFetching } = useVideos()
+  /** Corte no cliente, como no painel do admin: um criador prolífico rendia uma
+   *  rolagem infinita de coluna única no celular, já que a API devolve tudo de
+   *  uma vez e não há paginação no backend. */
+  const [visible, setVisible] = useState(PAGE_SIZE)
 
   if (!isCreator) {
     return (
@@ -314,16 +324,26 @@ function PublicVideos({
     )
   }
 
+  const shown = mine.slice(0, visible)
+  const remaining = mine.length - shown.length
+
   return (
     <>
       <p className="mb-4 text-sm text-surface-600">
         {mine.length} {mine.length === 1 ? 'vídeo publicado' : 'vídeos publicados'}
       </p>
       <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 min-[880px]:grid-cols-3">
-        {mine.map((video) => (
+        {shown.map((video) => (
           <VideoCard key={video.key} video={video} />
         ))}
       </div>
+      {remaining > 0 && (
+        <div className="mt-6 flex justify-center">
+          <Button variant="secondary" onClick={() => setVisible((v) => v + PAGE_SIZE)}>
+            Ver mais {Math.min(remaining, PAGE_SIZE)}
+          </Button>
+        </div>
+      )}
     </>
   )
 }

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ImageOff, Lock, FileEdit, Loader } from 'lucide-react'
 import { Avatar } from '@/components/ui/Avatar'
@@ -28,9 +29,20 @@ function StatusChip({ status }: { status: UiVideo['status'] }) {
 }
 
 function Thumb({ video, className }: { video: UiVideo; className?: string }) {
+  /** A capa quebrou ao carregar. Era resolvido escondendo o <img> via
+   *  `style.display`, mas o placeholder mora no OUTRO braço do ternário e nunca
+   *  chegava a montar: sobrava um retângulo cinza vazio, diferente do vídeo que
+   *  nunca teve capa. Além disso, mexer no DOM por fora do React significava
+   *  que qualquer re-render ressuscitava a imagem quebrada.
+   *  Com estado, os dois casos caem no mesmo placeholder. */
+  const [failed, setFailed] = useState(false)
+
+  // Uma capa nova (outro vídeo reaproveitando este nó) merece nova tentativa.
+  useEffect(() => setFailed(false), [video.safeThumbnail])
+
   return (
     <div className={cn('relative overflow-hidden bg-surface-200', className)}>
-      {video.safeThumbnail ? (
+      {video.safeThumbnail && !failed ? (
         <img
           src={video.safeThumbnail}
           alt=""
@@ -38,9 +50,7 @@ function Thumb({ video, className }: { video: UiVideo; className?: string }) {
           decoding="async"
           className="h-full w-full object-cover"
           // Thumbnail vem do storage; se o objeto sumir, cai no placeholder.
-          onError={(event) => {
-            event.currentTarget.style.display = 'none'
-          }}
+          onError={() => setFailed(true)}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-surface-500">
@@ -87,7 +97,10 @@ function Meta({ video }: { video: UiVideo }) {
   return (
     <p className="mt-0.5 text-[13px] leading-snug text-surface-600">
       <span className="block truncate">{video.creatorName}</span>
-      <span className="tabular-nums">
+      {/* `block truncate` também na segunda linha: como <span> em fluxo, "1,4
+          mil visualizações · há 2 meses" quebrava palavra a palavra quando o
+          card ficava estreito. Truncar mantém a linha única e legível. */}
+      <span className="block truncate tabular-nums">
         {formatViews(video.views)} · {formatRelativeDate(video.uploadDate)}
       </span>
     </p>
@@ -97,12 +110,18 @@ function Meta({ video }: { video: UiVideo }) {
 export function VideoCard({ video, compact, actions }: VideoCardProps) {
   if (compact) {
     return (
-      <CardShell video={video} className="group flex gap-2.5 rounded-lg">
-        {/* 128px abaixo de sm: com os 168px fixos, num viewport de 320px
-            sobravam 110px para o título de 2 linhas — que cortava em três
-            palavras. Este é o card dos relacionados, justamente o mais visto
-            em celular. */}
-        <Thumb video={video} className="aspect-video w-32 shrink-0 rounded-lg sm:w-[168px]" />
+      <CardShell video={video} className="group flex items-start gap-2.5 rounded-lg">
+        {/* A capa ENCOLHE junto com o card em vez de ter largura fixa.
+            `basis` define o tamanho desejado e `max-w-[45%]` é o limite real:
+            num card estreito a capa cede espaço em vez de empurrar o texto
+            para fora, que era o que produzia uma palavra por linha. */}
+        <Thumb
+          video={video}
+          className="aspect-video w-full min-w-0 shrink-0 basis-[168px] max-w-[45%] rounded-lg"
+        />
+        {/* `min-w-0` deixa o texto encolher dentro do flex (sem ele o conteúdo
+            impõe a largura mínima e estoura o container). O título trunca em
+            2 linhas e os metadados em 1 — nenhum dos dois empurra o layout. */}
         <div className="min-w-0 flex-1 pt-0.5">
           <h3 className="line-clamp-2 text-[13px] font-semibold leading-snug text-surface-900">
             {video.tittle}

@@ -71,11 +71,13 @@ export function VideoPage() {
             <Skeleton className="mt-4 h-7 w-3/4" />
             <Skeleton className="mt-3 h-20 w-full rounded-xl" />
           </div>
+          {/* Mesmas proporções do card compacto real (capa com basis de 168px
+              limitada a 45%), para a lista não "pular" quando os dados chegam. */}
           <div className="space-y-4">
             {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="flex gap-3">
-                <Skeleton className="aspect-video w-36 rounded-lg" />
-                <div className="flex-1 space-y-2">
+              <div key={index} className="flex items-start gap-2.5">
+                <Skeleton className="aspect-video w-full min-w-0 shrink-0 basis-[168px] max-w-[45%] rounded-lg" />
+                <div className="min-w-0 flex-1 space-y-2 pt-0.5">
                   <Skeleton className="h-3 w-full" />
                   <Skeleton className="h-3 w-2/3" />
                 </div>
@@ -195,19 +197,28 @@ export function VideoPage() {
         </div>
 
         {/* Relacionados */}
-        <aside className="min-w-0">
+        <aside className="@container min-w-0">
           <h2 className="mb-4 font-display text-base font-bold text-surface-900">
             Outros vídeos
           </h2>
           {related.length === 0 ? (
             <p className="text-sm text-surface-600">Nenhum outro vídeo por aqui ainda.</p>
           ) : (
-            // Duas colunas só na faixa em que a lista ainda está EMPILHADA sob
-            // o player (640–879px): ali cada item tinha a largura inteira da
-            // página e virava uma linha quase vazia, com o thumb ocupando um
-            // quinto dela. A partir de 880px a lista vira coluna lateral e
-            // volta a ser uma por linha.
-            <div className="grid gap-4 sm:grid-cols-2 min-[880px]:grid-cols-1">
+            // Container query, e não breakpoint de viewport: o que decide se
+            // cabem duas colunas é a largura DESTE bloco, não a da janela.
+            //
+            // Com `sm:grid-cols-2 min-[880px]:grid-cols-1` a conta era feita
+            // pela janela enquanto o espaço real vinha do grid da página (menos
+            // a sidebar de 72px, o padding e a coluna do player). As duas
+            // medidas discordavam justamente na faixa em que a lista já era
+            // coluna lateral: ela recebia ~340px, dividia em duas colunas de
+            // ~170px e o thumb de 168px consumia a linha inteira — sobrava
+            // nada para o texto, que quebrava uma palavra por linha.
+            //
+            // Duas colunas só a partir de 520px DE CONTAINER: 2 × (168 de capa
+            // + 10 de gap + 80 de texto) + 16 do gap entre colunas. Abaixo
+            // disso, uma por linha em qualquer viewport.
+            <div className="grid gap-4 @[520px]:grid-cols-2">
               {related.map((item) => (
                 <VideoCard key={item.key} video={item} compact />
               ))}
