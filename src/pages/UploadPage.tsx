@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -60,6 +60,12 @@ export function UploadPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const [phase, setPhase] = useState<UploadPhase>('idle')
+  /** Permite abortar o PUT em andamento. O `signal` já era aceito pelo hook e
+   *  pelo serviço — só ninguém o fornecia, então um envio de até 2 GB, uma vez
+   *  começado, não tinha como ser interrompido pela interface: o botão de
+   *  cancelar ficava desabilitado e a própria tela pedia para não fechar a
+   *  página. A saída era abandonar a aba. */
+  const abortRef = useRef<AbortController | null>(null)
 
   const {
     register,
@@ -107,8 +113,12 @@ export function UploadPage() {
     setFormError(null)
     setProgress(0)
 
+    const controller = new AbortController()
+    abortRef.current = controller
+
     try {
       await upload.mutateAsync({
+        signal: controller.signal,
         metadata: {
           title: values.title,
           description: values.description,
@@ -128,9 +138,17 @@ export function UploadPage() {
       )
       navigate('/profile', { replace: true })
     } catch (error) {
-      setFormError(toErrorMessage(error))
+      // Cancelamento é escolha do usuário, não falha: um alerta vermelho
+      // "cancelado" acusaria a pessoa de um erro que ela não cometeu.
+      if (controller.signal.aborted) {
+        showToast('Envio cancelado.', 'info')
+      } else {
+        setFormError(toErrorMessage(error))
+      }
       setProgress(0)
       setPhase('idle')
+    } finally {
+      abortRef.current = null
     }
   }
 
@@ -248,19 +266,26 @@ export function UploadPage() {
                 : PHASE_LABEL[phase]}
             </p>
             <p className="mt-2 text-xs text-surface-600">
-              Não feche esta página até o envio terminar.
+              Não feche esta página até o envio terminar. Para interromper, use
+              “Cancelar envio”.
             </p>
           </div>
         )}
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          {/* Durante o envio este botão ABORTA em vez de sair da tela: sair
+              deixaria o PUT correndo em segundo plano sem nada para
+              acompanhá-lo. O rótulo muda junto com a ação — um botão que faz
+              duas coisas diferentes precisa dizer qual delas fará agora. */}
           <Button
             type="button"
             variant="secondary"
-            onClick={() => navigate(-1)}
-            disabled={isUploading}
+            onClick={() => {
+              if (isUploading) abortRef.current?.abort()
+              else navigate(-1)
+            }}
           >
-            Cancelar
+            {isUploading ? 'Cancelar envio' : 'Cancelar'}
           </Button>
           <Button type="submit" size="lg" isLoading={isUploading}>
             {!isUploading && <UploadCloud size={17} />}

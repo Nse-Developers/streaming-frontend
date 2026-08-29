@@ -65,6 +65,15 @@ export function LoginPage() {
       {formError && (
         <Alert tone="error" focusOnMount className="mb-5">
           {formError}
+          {/* O aviso de "entre para acessar esta página" some quando há erro
+              (para não empilhar dois alertas), e com ele sumia o motivo de o
+              usuário estar aqui. A frase volta como complemento do erro, então
+              o destino pretendido continua na tela sem um segundo bloco. */}
+          {from && (
+            <span className="mt-1 block text-xs opacity-90">
+              Você será levado à página que tentou abrir assim que entrar.
+            </span>
+          )}
         </Alert>
       )}
 

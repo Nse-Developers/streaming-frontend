@@ -33,8 +33,15 @@ export function RatingSection({ videoId }: { videoId: number }) {
   const { isAuthenticated } = useAuth()
   const { showToast } = useToast()
 
-  const { average, total, likes, dislikes, isLoading: loadingRating } = useVideoRating(videoId)
-  const { feedback: mine, isLoading: loadingMine } = useMyVideoFeedback(videoId)
+  const {
+    average,
+    total,
+    likes,
+    dislikes,
+    isLoading: loadingRating,
+    isError: ratingFailed,
+  } = useVideoRating(videoId)
+  const { feedback: mine, isLoading: loadingMine, isError: mineFailed } = useMyVideoFeedback(videoId)
 
   const give = useGiveFeedback(videoId)
   const remove = useRemoveFeedback(videoId)
@@ -80,6 +87,11 @@ export function RatingSection({ videoId }: { videoId: number }) {
 
         {loadingRating ? (
           <Skeleton className="h-5 w-28" />
+        ) : /* Uma busca que FALHOU caía no mesmo texto de "zero avaliações":
+               a média sumia e a tela afirmava, com confiança, que ninguém
+               tinha avaliado — quando na verdade não dava para saber. */
+        ratingFailed ? (
+          <p className="text-sm text-surface-600">Não foi possível carregar as avaliações.</p>
         ) : total === 0 ? (
           <p className="text-sm text-surface-600">Nenhuma avaliação ainda.</p>
         ) : (
@@ -115,6 +127,16 @@ export function RatingSection({ videoId }: { videoId: number }) {
 
       {!isAuthenticated ? null : loadingMine ? (
         <Skeleton className="mt-4 h-11 w-full" />
+      ) : /* Mesma lógica do bloco acima, com consequência pior: sem saber se já
+             existe nota, `mine` fica falso e a tela abriria o formulário de
+             enviar — que é exatamente o caminho para o 409 que o comentário no
+             topo deste arquivo descreve. Melhor não oferecer a ação do que
+             oferecer uma que vai ser recusada. */
+      mineFailed ? (
+        <p className="mt-4 border-t border-surface-200 pt-4 text-sm text-surface-600">
+          Não foi possível verificar se você já avaliou este vídeo. Atualize a página para tentar de
+          novo.
+        </p>
       ) : mine ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-surface-200 pt-4">
           <p className="flex items-center gap-2 text-sm text-surface-700">
