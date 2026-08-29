@@ -66,6 +66,20 @@ export const authApi = {
       if (error instanceof ApiError && error.status === 409) {
         throw new ApiError('Já existe uma conta com este e-mail.', 409)
       }
+      // 422 é a recusa das políticas. O formulário já barra as duas condições,
+      // então chegar aqui significa relógio do cliente atrasado ou requisição
+      // fora da tela — mas a mensagem ainda precisa dizer QUAL das duas falhou.
+      // O backend responde em inglês ("The user is not old enough." / "The user
+      // did not accept the terms."), verificado ao vivo em 2026-08-29.
+      if (error instanceof ApiError && error.status === 422) {
+        const isAge = /old enough/i.test(error.message)
+        throw new ApiError(
+          isAge
+            ? 'É preciso ter 13 anos ou mais para criar uma conta.'
+            : 'É preciso aceitar os termos de uso e a política de privacidade.',
+          422,
+        )
+      }
       throw error
     }
   },

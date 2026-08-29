@@ -4,7 +4,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check, ChevronDown, Circle, Eye, UploadCloud } from 'lucide-react'
 import { AuthShell } from '@/components/auth/AuthShell'
+import { PolicyDialog } from '@/components/auth/PolicyDialog'
 import { Input } from '@/components/ui/Input'
+import { Checkbox } from '@/components/ui/Checkbox'
 import { PasswordInput } from '@/components/ui/PasswordInput'
 import { Textarea } from '@/components/ui/Textarea'
 import { Button } from '@/components/ui/Button'
@@ -12,7 +14,8 @@ import { Alert } from '@/components/ui/Alert'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { toErrorMessage } from '@/api/client'
-import { registerSchema, type RegisterValues } from '@/lib/validation'
+import { MIN_AGE_YEARS, registerSchema, type RegisterValues } from '@/lib/validation'
+import { getPolicy, type Policy } from '@/lib/policies'
 import { cn } from '@/lib/cn'
 
 const ACCOUNT_TYPES = [
@@ -30,6 +33,18 @@ const ACCOUNT_TYPES = [
   },
 ]
 
+/** Hoje em `YYYY-MM-DD` para o `max` do seletor de data.
+ *
+ *  Montado a partir das partes LOCAIS da data (`getFullYear`/`getMonth`/
+ *  `getDate`), e não de `toISOString()`, que converte para UTC: no Brasil isso
+ *  adiantaria o limite em um dia durante boa parte do dia. */
+const TODAY_ISO = (() => {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+})()
+
 /** Requisitos da senha mostrados ao vivo — evita descobrir a regra só no erro. */
 const PASSWORD_RULES = [
   { test: (v: string) => v.length >= 8, label: '8+ caracteres' },
@@ -45,6 +60,8 @@ export function RegisterPage() {
   const { showToast } = useToast()
   const [formError, setFormError] = useState<string | null>(null)
   const [showOptional, setShowOptional] = useState(false)
+  /** Qual documento está aberto para leitura, ou null. */
+  const [openPolicy, setOpenPolicy] = useState<Policy | null>(null)
 
   const from = (location.state as { from?: string } | null)?.from
 
@@ -64,6 +81,13 @@ export function RegisterPage() {
       email: '',
       password: '',
       confirmPassword: '',
+      dateOfBirth: '',
+      // Começa desmarcado SEMPRE: caixa pré-marcada não é aceite, e é esta
+      // declaração que o servidor grava como consentimento do titular.
+      // O schema exige `true`, então o tipo do formulário não admite `false`
+      // aqui — `undefined` é o "ainda não respondeu" que o resolver reprova
+      // com a mesma mensagem, sem precisar de cast.
+      acceptedPolicies: undefined,
       userTypeAccount: 'VIEWERS',
       bio: '',
       state: '',
@@ -76,6 +100,12 @@ export function RegisterPage() {
 
   const accountType = watch('userTypeAccount')
   const password = watch('password') ?? ''
+
+  /** Algum campo do bloco opcional foi reprovado? Só os validáveis entram: bio,
+   *  estado e país não têm regra, os três links têm formato de URL. */
+  const hasOptionalError = Boolean(
+    errors.bio || errors.state || errors.country || errors.linkInstagram || errors.linkYoutube || errors.linkWebsite,
+  )
 
   const onSubmit = async (values: RegisterValues) => {
     setFormError(null)
@@ -119,15 +149,39 @@ export function RegisterPage() {
         {/* Tipo de conta primeiro: define o que o usuário poderá fazer. */}
         <fieldset>
           <legend className="mb-2 text-sm font-medium text-surface-700">Como você vai usar?</legend>
-          <div className="grid gap-2.5 sm:grid-cols-2">
-            {ACCOUNT_TYPES.map(({ value, icon: Icon, label, hint }) => {
+          {/* Escolha ÚNICA, então `radiogroup` e não dois botões de alternância:
+              com `aria-pressed` o leitor de tela anunciava dois toggles
+              independentes ("pressionado"/"não pressionado"), sem dizer que
+              marcar um desmarca o outro nem quantas opções existem.
+              Mesmo padrão já usado nas estrelas do RatingSection: roving
+              tabindex (o grupo é UMA parada de Tab) e setas para navegar. */}
+          {/* Sem `aria-label` aqui: o <legend> do fieldset já nomeia o grupo, e
+              os dois juntos fariam o leitor anunciar o mesmo texto duas vezes. */}
+          <div role="radiogroup" className="grid gap-2.5 sm:grid-cols-2">
+            {ACCOUNT_TYPES.map(({ value, icon: Icon, label, hint }, index) => {
               const selected = accountType === value
               return (
                 <button
                   key={value}
                   type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  tabIndex={selected ? 0 : -1}
+                  id={`conta-${value}`}
+                  onKeyDown={(event) => {
+                    const delta =
+                      event.key === 'ArrowRight' || event.key === 'ArrowDown'
+                        ? 1
+                        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+                          ? -1
+                          : 0
+                    if (delta === 0) return
+                    event.preventDefault()
+                    const next = (index + delta + ACCOUNT_TYPES.length) % ACCOUNT_TYPES.length
+                    setValue('userTypeAccount', ACCOUNT_TYPES[next].value, { shouldValidate: true })
+                    document.getElementById(`conta-${ACCOUNT_TYPES[next].value}`)?.focus()
+                  }}
                   onClick={() => setValue('userTypeAccount', value, { shouldValidate: true })}
-                  aria-pressed={selected}
                   className={cn(
                     'flex items-start gap-3 rounded-xl border p-3.5 text-left transition-colors duration-150 focus-ring',
                     selected
@@ -189,6 +243,21 @@ export function RegisterPage() {
           {...register('email')}
         />
 
+        {/* Data de nascimento: campo obrigatório desde que o cadastro passou a
+            exigir idade mínima. `type="date"` entrega o formato YYYY-MM-DD que
+            a API espera, e o seletor nativo do sistema junto.
+            `max` impede escolher uma data futura pelo próprio seletor — a
+            validação ainda cobre quem digita à mão. */}
+        <Input
+          label="Data de nascimento"
+          type="date"
+          autoComplete="bday"
+          max={TODAY_ISO}
+          hint={`É preciso ter ${MIN_AGE_YEARS} anos ou mais.`}
+          error={errors.dateOfBirth?.message}
+          {...register('dateOfBirth')}
+        />
+
         <div className="grid gap-4 sm:grid-cols-2">
           <PasswordInput
             label="Senha"
@@ -206,8 +275,13 @@ export function RegisterPage() {
           />
         </div>
 
-        {password.length > 0 && (
-          <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {/* Sempre visível, não só depois da primeira tecla: as regras eram
+            reveladas quando o usuário JÁ estava digitando, então ele escolhia
+            uma senha e só então descobria as exigências.
+            `aria-live` porque os itens viram "atendido" conforme se digita —
+            sem isso, quem usa leitor de tela precisaria voltar até a lista para
+            saber se progrediu. */}
+        <ul aria-live="polite" className="flex flex-wrap gap-x-4 gap-y-1.5">
             {PASSWORD_RULES.map(({ test, label }) => {
               const ok = test(password)
               return (
@@ -232,8 +306,7 @@ export function RegisterPage() {
                 </li>
               )
             })}
-          </ul>
-        )}
+        </ul>
 
         {/* Campos opcionais escondidos: mantêm o formulário curto no celular. */}
         <div className="rounded-xl border border-surface-200">
@@ -260,7 +333,12 @@ export function RegisterPage() {
             />
           </button>
 
-          {showOptional && (
+          {/* Abre sozinho quando a validação reprova algo aqui dentro.
+              O painel é DESMONTADO quando fechado, então um link inválido em
+              "Instagram" bloqueava o envio com a mensagem de erro dentro de um
+              bloco invisível: clicar em "Criar conta" simplesmente não fazia
+              nada, sem dizer por quê. */}
+          {(showOptional || hasOptionalError) && (
             <div className="space-y-4 border-t border-surface-200 p-4">
               <Textarea
                 label="Bio"
@@ -305,10 +383,45 @@ export function RegisterPage() {
           )}
         </div>
 
+        {/* Aceite. Fica imediatamente antes do botão, o último passo antes de
+            criar a conta, e é o que o servidor grava junto da versão vigente
+            dos documentos. */}
+        <Checkbox
+          label={
+            <>
+              Li e aceito os{' '}
+              <button
+                type="button"
+                onClick={() => setOpenPolicy(getPolicy('terms'))}
+                className="font-semibold text-brand-link underline underline-offset-2 hover:no-underline focus-ring"
+              >
+                termos de uso
+              </button>{' '}
+              e a{' '}
+              <button
+                type="button"
+                onClick={() => setOpenPolicy(getPolicy('privacy'))}
+                className="font-semibold text-brand-link underline underline-offset-2 hover:no-underline focus-ring"
+              >
+                política de privacidade
+              </button>
+              .
+            </>
+          }
+          error={errors.acceptedPolicies?.message}
+          {...register('acceptedPolicies')}
+        />
+
+        {/* O botão NÃO fica desabilitado quando falta o aceite: um botão inerte
+            não diz o que está faltando, e o motivo some para quem usa leitor de
+            tela. Enviar com a caixa vazia reprova na validação e a mensagem
+            aparece presa ao próprio campo. */}
         <Button type="submit" size="lg" isLoading={isSubmitting} className="w-full">
           Criar conta
         </Button>
       </form>
+
+      <PolicyDialog policy={openPolicy} onClose={() => setOpenPolicy(null)} />
     </AuthShell>
   )
 }

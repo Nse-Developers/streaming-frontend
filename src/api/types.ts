@@ -23,6 +23,14 @@ export interface UserRegisterRequest {
   surname: string
   email: string
   password: string
+  /** `YYYY-MM-DD`. Obrigatorio: o backend recusa o cadastro abaixo de 13 anos
+   *  completos (422) e responde 400 quando o campo nao vem. */
+  dateOfBirth: string
+  /** Aceite dos termos de uso e da politica de privacidade. Precisa ser `true`:
+   *  ausente, null ou false recusam o cadastro com 422. O servidor grava a
+   *  declaracao junto da versao vigente dos documentos e do instante do aceite,
+   *  entao o front precisa exibir os dois textos ANTES de marcar isto. */
+  acceptedPolicies: boolean
   bio: string
   profilePhoto: string
   state: string
@@ -60,6 +68,9 @@ export interface UserResponse {
   name: string
   surname: string
   email: string
+  /** Se o titular aceitou os termos e a politica no cadastro. Contas criadas
+   *  antes da coleta desse aceite podem vir `false`. */
+  acceptTerms: boolean
   typeAccount: UserTypeAccount
   userAuth: UserAuth
   bio: string

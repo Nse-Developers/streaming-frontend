@@ -78,6 +78,51 @@ export const loginSchema = z.object({
 })
 export type LoginValues = z.infer<typeof loginSchema>
 
+/** Idade mínima para criar conta, espelhando a regra do backend (422 abaixo
+ *  disso). O número vive aqui para a mensagem e o bloqueio não saírem de
+ *  sincronia. */
+export const MIN_AGE_YEARS = 13
+
+/** Idade completa em anos na data de hoje.
+ *
+ *  Compara mês e dia, e não a diferença de milissegundos dividida por 365.25:
+ *  quem faz 13 anos HOJE já pode se cadastrar, e a aproximação por média erraria
+ *  o limite em até um dia perto de anos bissextos.
+ *
+ *  A data entra desmontada em números (`split`), sem `new Date('YYYY-MM-DD')`:
+ *  essa string é interpretada como UTC, então a oeste de Greenwich ela volta um
+ *  dia — e um aniversário no limite dos 13 anos seria recusado por engano. */
+export function ageInYears(isoDate: string, today = new Date()): number {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  let age = today.getFullYear() - year
+  const monthDiff = today.getMonth() + 1 - month
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < day)) age -= 1
+  return age
+}
+
+/** Data de nascimento. O formato `YYYY-MM-DD` é o que o backend espera e o mesmo
+ *  que `<input type="date">` produz, então não há conversão no meio.
+ *
+ *  A ordem das checagens é o que produz a mensagem certa: formato, depois
+ *  existência do dia, e só então idade. Uma data no futuro cai naturalmente na
+ *  regra de idade (idade negativa), sem precisar de refine próprio. */
+const dateOfBirthSchema = z
+  .string()
+  .min(1, 'Informe sua data de nascimento.')
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use uma data válida.')
+  // Existência antes de idade: 2025-02-30 casa com o formato mas não é um dia
+  // real, e o Date normalizaria para 02 de março sem reclamar.
+  .refine((value) => {
+    const [year, month, day] = value.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+  }, 'Use uma data válida.')
+  .refine((value) => ageInYears(value) < 130, 'Confira a data de nascimento.')
+  .refine(
+    (value) => ageInYears(value) >= MIN_AGE_YEARS,
+    `É preciso ter ${MIN_AGE_YEARS} anos ou mais para criar uma conta.`,
+  )
+
 export const registerSchema = z
   .object({
     name: nameSchema,
@@ -85,6 +130,12 @@ export const registerSchema = z
     email: emailSchema,
     password: passwordSchema,
     confirmPassword: z.string(),
+    dateOfBirth: dateOfBirthSchema,
+    // `literal(true)` e não `boolean()`: desmarcado precisa REPROVAR a
+    // validação aqui, não enviar `false` para colher 422 do servidor.
+    acceptedPolicies: z.literal(true, {
+      message: 'É preciso aceitar os termos de uso e a política de privacidade.',
+    }),
     userTypeAccount: z.enum(['CREATORS', 'VIEWERS']),
     bio: z.string().transform(multiLine).pipe(z.string().max(400, 'Máximo de 400 caracteres.')),
     state: shortText(60),
