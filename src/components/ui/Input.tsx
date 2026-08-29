@@ -1,4 +1,4 @@
-import { forwardRef, type InputHTMLAttributes } from 'react'
+import { forwardRef, useId, type InputHTMLAttributes } from 'react'
 import { cn } from '@/lib/cn'
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -9,7 +9,13 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, hint, id, className, ...props }, ref) => {
-    const inputId = id ?? props.name
+    const generatedId = useId()
+    const inputId = id ?? props.name ?? generatedId
+    /** `aria-describedby` liga a mensagem ao campo. Sem ele o leitor de tela
+     *  anunciava "inválido" e nunca o motivo: o texto do erro ficava como
+     *  parágrafo solto, alcançável só saindo do modo de formulário. */
+    const msgId = `${inputId}-msg`
+    const describedBy = error || hint ? msgId : undefined
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
@@ -26,12 +32,17 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             className,
           )}
           aria-invalid={Boolean(error)}
+          aria-describedby={describedBy}
           {...props}
         />
         {error ? (
-          <p className="text-xs font-medium text-danger-400">{error}</p>
+          <p id={msgId} className="text-xs font-medium text-danger-ink">
+            {error}
+          </p>
         ) : hint ? (
-          <p className="text-xs text-surface-600">{hint}</p>
+          <p id={msgId} className="text-xs text-surface-600">
+            {hint}
+          </p>
         ) : null}
       </div>
     )

@@ -26,7 +26,7 @@ function HeroBody({ video }: { video: UiVideo }) {
     <>
       {/* max-h impede o destaque de empurrar o feed para fora da primeira
           dobra em telas largas — o aspect-ratio sozinho cresce sem limite. */}
-      <div className="aspect-[16/10] max-h-[62vh] w-full sm:aspect-[21/9] lg:aspect-[2.8/1]">
+      <div className="aspect-[16/10] max-h-[62vh] w-full sm:aspect-[21/9] min-[880px]:aspect-[2.6/1] lg:aspect-[2.8/1]">
         {video.safeThumbnail ? (
           <img
             src={video.safeThumbnail}
@@ -47,7 +47,11 @@ function HeroBody({ video }: { video: UiVideo }) {
       />
 
       {video.id != null && (
-        <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        // No toque não existe hover: o botão de play NUNCA aparecia, e o
+        // destaque ficava sem qualquer sinal de que era clicável. Abaixo de
+        // `sm` ele fica sempre visível; no ponteiro fino segue revelando-se no
+        // hover (e agora também no foco por teclado, que tinha o mesmo furo).
+        <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-200 max-sm:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100">
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/95 text-surface-900 shadow-elevated">
             <Play size={26} fill="currentColor" className="ml-0.5" />
           </span>
@@ -55,12 +59,20 @@ function HeroBody({ video }: { video: UiVideo }) {
       )}
 
       <div className="absolute inset-x-0 bottom-0 p-4 sm:p-7 lg:p-9">
-        <h2 className="max-w-3xl font-display text-xl font-extrabold leading-[1.12] tracking-tight text-white sm:text-3xl lg:text-[2.4rem]">
+        {/* O bloco de texto é absoluto e ancorado embaixo, então ele cresce
+            para CIMA — e a altura do destaque é fixada pelo aspect-ratio. Um
+            título longo em 320px passava de quatro linhas e escapava por cima
+            do gradiente, ficando sobre a parte clara da capa. O clamp segura
+            em duas linhas no mobile e três a partir de sm, onde há altura. */}
+        <h2 className="line-clamp-2 max-w-3xl font-display text-xl font-extrabold leading-[1.12] tracking-tight text-white sm:line-clamp-3 sm:text-3xl lg:text-[2.4rem]">
           {video.tittle}
         </h2>
 
         {video.description && (
-          <p className="mt-2 hidden max-w-xl text-sm leading-relaxed text-white/70 sm:line-clamp-2">
+          // `hidden` era desfeito só pelo `display:-webkit-box` que o
+          // `line-clamp` traz de brinde — trocar o clamp quebraria a
+          // visibilidade sem aviso. `sm:block` torna a intenção explícita.
+          <p className="mt-2 hidden max-w-xl text-sm leading-relaxed text-white/70 sm:block sm:line-clamp-2">
             {video.description}
           </p>
         )}

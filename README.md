@@ -10,7 +10,8 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-O backend precisa estar no ar (com MySQL, Redis e MinIO). Em desenvolvimento as
+O backend precisa estar no ar (com MySQL, Redis e o storage de objetos — hoje
+Cloudflare R2). Em desenvolvimento as
 chamadas passam pelo **proxy do Vite**: o front pede `/api/...` na própria
 origem e o Vite repassa para a API, então **não há CORS no caminho** — trocar a
 porta do dev server não quebra nada.
@@ -23,8 +24,9 @@ o `Tomcat started on port ...` no log do Spring se estiver em dúvida.
 > Vite falha na hora dizendo isso, em vez de subir em 5174 — a porta 5173 é a
 > única liberada no CORS do backend, e o build de produção depende disso.
 
-> **Bucket do MinIO** (`byou-stream-bucket`) precisa existir, senão o upload
-> falha com 500. Ver a seção de infraestrutura em `PENDENCIAS.md`.
+> **O bucket do storage** precisa existir, senão o upload falha com 500. O
+> backend hoje assina URLs do Cloudflare R2 (`*.r2.cloudflarestorage.com`), não
+> mais do MinIO local.
 
 ```bash
 npm run build        # tsc -b && vite build
@@ -64,8 +66,9 @@ resultariam em 403, e para falhar de forma explicada em vez de silenciosa.
   navegador.
 - **CSRF**: o axios já ecoa o cookie `XSRF-TOKEN` no header `X-XSRF-TOKEN`
   (`xsrfCookieName`/`xsrfHeaderName`). Necessário porque cookie automático é
-  vulnerável a CSRF, diferente de Bearer em header. **Atenção:** hoje o backend
-  não emite esse cookie, o que bloqueia todas as escritas — ver `PENDENCIAS.md`.
+  vulnerável a CSRF, diferente de Bearer em header. **Funcionando** (verificado
+  em 2026-08-27): o backend emite `XSRF-TOKEN` no login e recusa com 403 a
+  escrita sem o header `X-XSRF-TOKEN`.
 - **Guards de rota** (`components/auth/RouteGuards.tsx`) espelham o
   `SecurityConfig`: sem sessão vai para `/login` guardando o destino; com sessão
   mas sem o papel necessário vai para `/403` com a explicação do motivo. Vale
@@ -131,16 +134,42 @@ fontes vêm do Google Fonts via `<link>` no `index.html`, daí as duas exceçõe
 
 ## Estado da integração
 
-Todas as rotas disponíveis estão ligadas, e **toda leitura funciona**: feed,
-página de vídeo, comentários, categorias, perfil, listagem de usuários.
+Reverificado ao vivo em **2026-08-27** contra a API 2.0. Todas as rotas
+disponíveis estão ligadas, e **leitura e escrita funcionam**: feed, página de
+vídeo, comentários, curtidas, categorias, perfil, avaliações, upload nos três
+passos, e troca de status.
 
-**Nenhuma escrita funciona hoje** — comentar, curtir, enviar vídeo, editar
-perfil e até sair respondem 403. A causa é de backend: a proteção CSRF está
-ativa, mas o servidor nunca emite o cookie `XSRF-TOKEN` que a destravaria.
+O que estava documentado aqui como quebrado **foi corrigido no backend** e não
+vale mais: o cookie `XSRF-TOKEN` é emitido no login (escritas funcionam),
+`videoUrl` vem na resposta como URL assinada (reprodução funciona) e
+`PATCH /video/update/status` responde 200.
 
-Também fora do ar: reprodução de vídeo (falta `videoUrl` na resposta) e
-publicar/tornar privado (`PATCH /video/update/status` responde 500 mesmo com id
-válido).
+Pendências conhecidas, todas de backend:
 
-**O diagnóstico completo de cada interação — o que funciona, o que não, por que,
-e como corrigir — está em [PENDENCIAS.md](PENDENCIAS.md).**
+- **`PUT`/`DELETE /auth/users/{email}` são self-only** — respondem 403 para o
+  ADMIN agindo sobre outra conta. O botão "remover usuário" do painel admin
+  sempre falha por causa disso.
+- **`DELETE /comments/{id}` responde 404** mesmo para um comentário existente do
+  próprio usuário. Por isso não há "excluir comentário" na UI — ver
+  `commentApi.removeComment`.
+- **`GET /video` e `GET /video/{id}` entregam DRAFT/PRIVATE de terceiros ao
+  ADMIN**, com URL de reprodução válida. Para usuário comum já respondem
+  correto (404). O front recusa exibir — ver `canView` em `lib/video.ts`.
+- **`GET /feedback/getFeedbacks` não tem filtro nem paginação** e devolve o
+  vídeo e o usuário aninhados em cada item: ~1,6 KB por avaliação, dos quais a
+  UI usa 4 campos. Ver a nota de cache em `hooks/useFeedback.ts`.
+
+### Antes de publicar em produção
+
+Dois bloqueios que **não são do frontend** e derrubam o app inteiro num domínio
+real (verificados em 2026-08-27):
+
+1. **CORS libera apenas `http://localhost:5173`.** O preflight de qualquer outra
+   origem responde 403 — nenhuma request funcionaria.
+2. **O cookie `byou_session` é `SameSite=Lax` e sem `Secure`.** Com front e API
+   em domínios diferentes o navegador não o envia, e o usuário fica deslogado
+   logo após o login. Em produção precisa ser `Secure; SameSite=None` (ou os
+   dois sob o mesmo domínio).
+
+Do lado do deploy, o servidor que servir o `dist/` precisa de **fallback de SPA**
+(toda rota desconhecida -> `index.html`), senão abrir `/videos/1` direto dá 404.

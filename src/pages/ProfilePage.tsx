@@ -61,7 +61,7 @@ export function ProfilePage() {
               {ACCOUNT_LABEL[user.userTypeAccount]}
             </span>
             {isAdmin && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-success-500/12 px-2.5 py-1 text-[11px] font-semibold text-success-500">
+              <span className="inline-flex items-center gap-1 rounded-full bg-success-500/12 px-2.5 py-1 text-[11px] font-semibold text-success-ink">
                 <ShieldCheck size={11} />
                 Administrador
               </span>
@@ -79,25 +79,63 @@ export function ProfilePage() {
         )}
       </header>
 
+      {/* Conta de espectador: a seção "Meus vídeos" simplesmente não existia,
+          sem nenhuma explicação — a tela parecia incompleta, e não restrita.
+          Dizer o motivo é mais honesto do que omitir em silêncio. */}
+      {!isCreator && (
+        <section className="mt-10">
+          <h2 className="mb-4 font-display text-lg font-bold text-surface-900">Meus vídeos</h2>
+          <EmptyState
+            icon={Film}
+            title="Sua conta é de espectador"
+            description="Contas de espectador assistem, comentam e avaliam, mas não publicam vídeos."
+          />
+        </section>
+      )}
+
       {/* Meus vídeos — só faz sentido para quem publica */}
       {isCreator && (
         <section className="mt-10">
           <h2 className="mb-4 font-display text-lg font-bold text-surface-900">Meus vídeos</h2>
 
+          {/* O contrato de `tablist` estava pela metade: havia `role="tab"`, mas
+              nenhum `tabpanel`, nenhum `aria-controls` e nenhuma navegação por
+              setas. Para o leitor de tela isso anuncia "aba 1 de 3" e promete
+              um painel associado que não existia — e as três abas eram três
+              paradas de Tab, quando o padrão ARIA pede UMA.
+              Mesma solução já usada no radiogroup das estrelas (RatingSection):
+              roving tabindex, setas circulares, e o painel ligado por id. */}
           <div
             role="tablist"
             aria-label="Filtrar por status"
             className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
           >
-            {TABS.map(({ key, label }) => (
+            {TABS.map(({ key, label }, index) => (
               <button
                 key={key}
+                id={`tab-${key}`}
                 role="tab"
                 aria-selected={tab === key}
+                aria-controls={`painel-${key}`}
+                tabIndex={tab === key ? 0 : -1}
                 type="button"
                 onClick={() => setTab(key)}
+                onKeyDown={(event) => {
+                  const delta =
+                    event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+                  if (delta === 0) return
+                  event.preventDefault()
+                  const next = (index + delta + TABS.length) % TABS.length
+                  setTab(TABS[next].key)
+                  // O foco acompanha a seleção: sem isto a seta trocaria o
+                  // painel mas deixaria o foco na aba antiga.
+                  document.getElementById(`tab-${TABS[next].key}`)?.focus()
+                }}
                 className={cn(
                   'shrink-0 rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors duration-150 focus-ring',
+                  // 44px de alvo no toque, como no Button `sm`: a fita de abas
+                  // media 36px de altura e é o controle mais tocado da tela.
+                  'max-sm:min-h-[44px]',
                   tab === key
                     ? 'bg-surface-900 text-surface-0'
                     : 'bg-surface-200 text-surface-700 hover:bg-surface-300',
@@ -108,7 +146,9 @@ export function ProfilePage() {
             ))}
           </div>
 
-          <MyVideos status={tab} email={user.email} />
+          <div id={`painel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`} tabIndex={-1}>
+            <MyVideos status={tab} email={user.email} />
+          </div>
         </section>
       )}
 
@@ -129,7 +169,7 @@ function MyVideos({ status, email }: { status: VideoStatus; email: string }) {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 min-[880px]:grid-cols-3">
         {Array.from({ length: 3 }).map((_, index) => (
           <VideoCardSkeleton key={index} />
         ))}
@@ -193,7 +233,7 @@ function MyVideos({ status, email }: { status: VideoStatus; email: string }) {
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 min-[880px]:grid-cols-3">
         {data.map((video) => (
           <VideoCard
             key={video.key}
@@ -267,7 +307,7 @@ function VideoStatusActions({ video }: { video: UiVideo }) {
         variant="ghost"
         size="sm"
         onClick={() => setConfirmDelete(true)}
-        className="text-danger-400 hover:bg-danger-500/10 hover:text-danger-400"
+        className="text-danger-ink hover:bg-danger-500/10 hover:text-danger-ink"
       >
         <Trash2 size={14} />
         Excluir
@@ -301,7 +341,8 @@ function ProfileForm({ user }: { user: AuthUser }) {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    reset,
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
     // /auth/me passou a devolver o perfil completo, então o formulário abre
@@ -327,6 +368,10 @@ function ProfileForm({ user }: { user: AuthUser }) {
       // Sem isto o cabeçalho e o próprio form continuariam mostrando os dados
       // antigos até o próximo F5.
       await refreshUser()
+      // Redefine a linha de base do `isDirty`: sem isto o formulário continua
+      // "sujo" depois de salvar, e o botão seguiria habilitado convidando a um
+      // segundo PUT idêntico.
+      reset(values)
       showToast('Perfil atualizado.', 'success')
     } catch (error) {
       setFormError(toErrorMessage(error))
@@ -336,7 +381,7 @@ function ProfileForm({ user }: { user: AuthUser }) {
   return (
     <>
       {formError && (
-        <Alert tone="error" className="mb-5">
+        <Alert tone="error" focusOnMount className="mb-5">
           {formError}
         </Alert>
       )}
@@ -388,7 +433,10 @@ function ProfileForm({ user }: { user: AuthUser }) {
         </div>
 
         <div className="flex justify-end">
-          <Button type="submit" size="lg" isLoading={isSubmitting}>
+          {/* Desabilitado enquanto nada mudou: antes era possível salvar um
+              formulário intocado e receber "Perfil atualizado." por um PUT que
+              não alterou nada — uma confirmação de algo que não aconteceu. */}
+          <Button type="submit" size="lg" isLoading={isSubmitting} disabled={!isDirty}>
             <Save size={16} />
             Salvar alterações
           </Button>

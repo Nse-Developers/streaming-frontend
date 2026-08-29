@@ -3,8 +3,9 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
-// O backend só libera http://localhost:5173 no CORS. Se a 5173 estiver ocupada,
-// o Vite sobe na 5174 e TODA request falha no preflight. Duas defesas aqui:
+// O CORS do backend é restrito, então a porta do dev server importa. Se a 5173
+// estiver ocupada, o Vite sobe na 5174 e TODA request falha no preflight.
+// Duas defesas aqui:
 //   1. strictPort: falha na hora com mensagem clara, em vez de trocar de porta
 //      silenciosamente e quebrar só depois, no navegador.
 //   2. proxy: em dev o front chama /api (mesma origem), e o Vite repassa para o
@@ -51,15 +52,32 @@ export default defineConfig(({ mode }) => {
           target,
           changeOrigin: true,
           rewrite: (requestPath) => requestPath.replace(/^\/api/, ''),
-          // O backend seta o cookie de sessão sem atributo Domain (o padrão
-          // é o host da própria origem da resposta). Como o proxy responde
-          // como se fosse http://localhost:5173, o cookie já nasce válido
-          // para essa origem — não precisa reescrever nada aqui. Mantido
-          // documentado porque é o primeiro lugar a olhar se o login parar
-          // de "colar": cookieDomainRewrite: { '*': '' } força o cookie a
-          // valer para a origem do proxy, caso o backend um dia comece a
-          // setar um Domain explícito.
+          // O cookie é reescrito para valer na origem do proxy. Com o backend
+          // local isto era só precaução (ele não manda Domain); apontando para
+          // a API hospedada passa a ser necessário, porque o cookie nasce
+          // válido para .squareweb.app.
           cookieDomainRewrite: { '*': '' },
+          // A API hospedada responde em https e marca o cookie de sessão como
+          // `Secure`, mas o proxy entrega em http://localhost:5173 — e um
+          // cookie Secure não é guardado numa origem http. O navegador
+          // DESCARTA em silêncio: o login devolve 200, o cookie some, e a
+          // request seguinte volta 401 sem nenhum erro visível.
+          // Tirar o atributo só no caminho dev/proxy resolve; nada disso
+          // alcança o build de produção, que fala direto com a API em https.
+          cookiePathRewrite: { '*': '/' },
+          configure: (proxy) => {
+            proxy.on('proxyRes', (proxyRes) => {
+              const cookies = proxyRes.headers['set-cookie']
+              if (!cookies) return
+              proxyRes.headers['set-cookie'] = cookies.map((cookie) =>
+                cookie
+                  .replace(/;\s*Secure/gi, '')
+                  // SameSite=None sem Secure é rejeitado pelo navegador; como
+                  // via proxy tudo é mesma origem, Lax é o equivalente válido.
+                  .replace(/;\s*SameSite=None/gi, '; SameSite=Lax'),
+              )
+            })
+          },
         },
       },
     },

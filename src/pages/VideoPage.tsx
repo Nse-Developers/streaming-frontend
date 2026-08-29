@@ -2,9 +2,11 @@ import { Link, useParams } from 'react-router-dom'
 import { Share2, Compass, ServerCrash } from 'lucide-react'
 import { useVideo, useVideos } from '@/hooks/useVideos'
 import { useToast } from '@/context/ToastContext'
+import { useAuth } from '@/context/AuthContext'
 import { VideoPlayer } from '@/components/video/VideoPlayer'
 import { VideoCard } from '@/components/video/VideoCard'
 import { CommentSection } from '@/components/video/CommentSection'
+import { RatingSection } from '@/components/video/RatingSection'
 import { Avatar } from '@/components/ui/Avatar'
 import { UserLink, UserAvatarLink } from '@/components/user/UserLink'
 import { FollowButton } from '@/components/user/FollowButton'
@@ -16,16 +18,17 @@ import { Badge } from '@/components/ui/Badge'
 import { toErrorMessage } from '@/api/client'
 import { safeExternalUrl } from '@/lib/validation'
 import { formatViews, formatRelativeDate } from '@/lib/format'
-import { STATUS_LABEL } from '@/lib/video'
+import { STATUS_LABEL, canView } from '@/lib/video'
 
 export function VideoPage() {
   const { id } = useParams<{ id: string }>()
   const videoId = Number(id)
   const isValidId = Number.isInteger(videoId) && videoId > 0
 
-  const { data: video, isLoading, isError, error } = useVideo(videoId)
+  const { data: video, isLoading, isError, error, refetch } = useVideo(videoId)
   const { data: allVideos } = useVideos()
   const { showToast } = useToast()
+  const { user } = useAuth()
 
   const share = async () => {
     const url = window.location.href
@@ -45,6 +48,7 @@ export function VideoPage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
         <EmptyState
+          headingLevel="h1"
           icon={Compass}
           title="Endereço inválido"
           description="O identificador do vídeo não é um número válido."
@@ -61,17 +65,19 @@ export function VideoPage() {
   if (isLoading) {
     return (
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid gap-8 min-[880px]:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_360px]">
           <div>
             <Skeleton className="aspect-video w-full rounded-xl" />
             <Skeleton className="mt-4 h-7 w-3/4" />
             <Skeleton className="mt-3 h-20 w-full rounded-xl" />
           </div>
+          {/* Mesmas proporções do card compacto real (capa com basis de 168px
+              limitada a 45%), para a lista não "pular" quando os dados chegam. */}
           <div className="space-y-4">
             {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="flex gap-3">
-                <Skeleton className="aspect-video w-36 rounded-lg" />
-                <div className="flex-1 space-y-2">
+              <div key={index} className="flex items-start gap-2.5">
+                <Skeleton className="aspect-video w-full min-w-0 shrink-0 basis-[168px] max-w-[45%] rounded-lg" />
+                <div className="min-w-0 flex-1 space-y-2 pt-0.5">
                   <Skeleton className="h-3 w-full" />
                   <Skeleton className="h-3 w-2/3" />
                 </div>
@@ -83,10 +89,17 @@ export function VideoPage() {
     )
   }
 
-  if (isError || !video) {
+  // O backend entrega PRIVATE/DRAFT de terceiros nesta rota (ver `canView`).
+  // Tratado como "não encontrado", e não como um 403 explícito: dizer "sem
+  // permissão" confirmaria a existência do vídeo naquele id para quem está
+  // sondando. A mesma tela do id inexistente não revela nada.
+  const blocked = Boolean(video) && !canView(video!, user?.id)
+
+  if (isError || !video || blocked) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
         <EmptyState
+          headingLevel="h1"
           icon={ServerCrash}
           title="Vídeo não encontrado"
           description={
@@ -109,9 +122,16 @@ export function VideoPage() {
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 pb-16 pt-4 sm:px-6 sm:pt-6">
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-8 min-[880px]:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
-          <VideoPlayer src={safeExternalUrl(video.videoUrl)} poster={poster} title={video.tittle} />
+          <VideoPlayer
+            src={safeExternalUrl(video.videoUrl)}
+            poster={poster}
+            title={video.tittle}
+            // Refetch da query do vídeo: traz uma URL assinada nova quando a
+            // anterior expira (6 h). `refetch` já ignora o staleTime.
+            onRetry={() => void refetch()}
+          />
 
           <h1 className="mt-4 font-display text-lg font-extrabold leading-snug tracking-tight text-surface-900 sm:text-2xl">
             {video.tittle}
@@ -127,8 +147,8 @@ export function VideoPage() {
           </div>
 
           {/* Ações: criador à esquerda, compartilhar à direita.
-              Curtir/não curtir sai daqui enquanto a avaliação está em standby
-              (feature a implementar; ver PENDENCIAS.md). */}
+              Curtir/não curtir NÃO fica aqui: a reação é parte da avaliação
+              (POST /feedback), junto da nota — ver RatingSection abaixo. */}
           <div className="mt-4 flex flex-col gap-3 border-y border-surface-200 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               <UserAvatarLink userId={video.userId} name={video.creatorName}>
@@ -171,18 +191,34 @@ export function VideoPage() {
             </div>
           )}
 
+          <RatingSection videoId={videoId} />
+
           <CommentSection videoId={videoId} />
         </div>
 
         {/* Relacionados */}
-        <aside className="min-w-0">
+        <aside className="@container min-w-0">
           <h2 className="mb-4 font-display text-base font-bold text-surface-900">
             Outros vídeos
           </h2>
           {related.length === 0 ? (
             <p className="text-sm text-surface-600">Nenhum outro vídeo por aqui ainda.</p>
           ) : (
-            <div className="space-y-4">
+            // Container query, e não breakpoint de viewport: o que decide se
+            // cabem duas colunas é a largura DESTE bloco, não a da janela.
+            //
+            // Com `sm:grid-cols-2 min-[880px]:grid-cols-1` a conta era feita
+            // pela janela enquanto o espaço real vinha do grid da página (menos
+            // a sidebar de 72px, o padding e a coluna do player). As duas
+            // medidas discordavam justamente na faixa em que a lista já era
+            // coluna lateral: ela recebia ~340px, dividia em duas colunas de
+            // ~170px e o thumb de 168px consumia a linha inteira — sobrava
+            // nada para o texto, que quebrava uma palavra por linha.
+            //
+            // Duas colunas só a partir de 520px DE CONTAINER: 2 × (168 de capa
+            // + 10 de gap + 80 de texto) + 16 do gap entre colunas. Abaixo
+            // disso, uma por linha em qualquer viewport.
+            <div className="grid gap-4 @[520px]:grid-cols-2">
               {related.map((item) => (
                 <VideoCard key={item.key} video={item} compact />
               ))}

@@ -103,7 +103,7 @@ http.interceptors.response.use(
     //
     // Em 5xx ela é descartada: `ExceptionResponse.message` de um erro não
     // tratado carrega a mensagem da exceção do Spring, que pode trazer nome de
-    // tabela/coluna, fragmento de SQL, caminho de classe ou host do MinIO — e
+    // tabela/coluna, fragmento de SQL, caminho de classe ou host do storage — e
     // isso ia direto para a tela do usuário via toErrorMessage(). Detalhe de
     // implementação não é mensagem de erro; serve de mapa para quem sonda.
     const apiMessage = typeof data?.message === 'string' ? data.message.trim() : ''
