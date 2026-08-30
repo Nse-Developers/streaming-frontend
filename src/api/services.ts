@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { ApiError, http } from './client'
+import { ApiError, clearCsrfToken, http, setCsrfToken } from './client'
 import { safeExternalUrl } from '@/lib/validation'
 import type {
   CategoryRequest,
@@ -27,12 +27,19 @@ import type {
 /* ---------------------------------------------------------------- auth */
 
 export const authApi = {
-  /** O login não devolve o usuário nem o token no corpo — só o Set-Cookie
-   *  (byou_session, HttpOnly). Depois de chamar isto, use authApi.me() para
-   *  saber quem entrou. */
+  /** O login não devolve o usuário nem o token de SESSÃO no corpo — a sessão vai
+   *  só no Set-Cookie (byou_session, HttpOnly). Depois de chamar isto, use
+   *  authApi.me() para saber quem entrou.
+   *
+   *  O corpo traz apenas o token CSRF, que precisa ser legível por JS por
+   *  definição (é ecoado num header). Ele não dá acesso a nada sozinho: sem o
+   *  cookie de sessão, não autentica. */
   async login(body: UserLoginRequest): Promise<void> {
     try {
-      await http.post<UserLoginResponse>('/auth/login', body)
+      const { data } = await http.post<UserLoginResponse>('/auth/login', body)
+      // O servidor rotaciona o token CSRF ao autenticar: guardar o novo é o que
+      // faz as escritas seguintes passarem.
+      setCsrfToken(data?.csrfToken)
     } catch (error) {
       // A API responde 403 para senha errada e 404 para e-mail inexistente.
       // As duas viram a MESMA mensagem: distinguir permitiria descobrir quais
@@ -55,6 +62,8 @@ export const authApi = {
    *  front não teria como apagar um cookie HttpOnly — só o backend pode. */
   async logout() {
     await http.post('/auth/logout')
+    // O token da sessão encerrada não serve mais; o próximo login traz outro.
+    clearCsrfToken()
   },
 
   async register(body: UserRegisterRequest) {

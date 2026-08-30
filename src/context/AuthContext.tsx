@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { authApi } from '@/api/services'
-import { ApiError, onUnauthorized } from '@/api/client'
+import { ApiError, onUnauthorized, refreshCsrfToken } from '@/api/client'
 import type {
   UserAuth,
   UserRegisterRequest,
@@ -110,9 +110,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // é o próprio backend.
   useEffect(() => {
     let cancelled = false
-    void refreshUser().finally(() => {
-      if (!cancelled) setIsReady(true)
-    })
+    // O token CSRF vive só em memória, então um refresh de página o perde
+    // enquanto o cookie de sessão sobrevive. Sem repô-lo aqui, a sessão
+    // restaurada lê tudo mas falha em toda escrita com 403 até o próximo
+    // login. Buscar antes de refreshUser garante que a interface só fica
+    // pronta com o par sessão + token completo.
+    void refreshCsrfToken()
+      .then(() => refreshUser())
+      .finally(() => {
+        if (!cancelled) setIsReady(true)
+      })
     return () => {
       cancelled = true
     }

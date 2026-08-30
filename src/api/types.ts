@@ -12,10 +12,22 @@ export interface UserLoginRequest {
   password: string
 }
 
-/** POST /auth/login não devolve corpo desde a migração para cookie HttpOnly:
- *  o token vai só no header Set-Cookie, nunca no JSON (senão o cookie HttpOnly
- *  perderia o sentido — um script malicioso leria o token pela resposta). */
-export type UserLoginResponse = void
+/** POST /auth/login não devolve o token de SESSÃO no corpo: ele vai só no
+ *  header Set-Cookie (byou_session, HttpOnly), nunca no JSON — senão o HttpOnly
+ *  perderia o sentido, e um script malicioso leria a sessão pela resposta.
+ *
+ *  O corpo carrega apenas o token CSRF, que é público por natureza (vai num
+ *  header a cada escrita) e inútil sem o cookie de sessão. Ele vem no corpo
+ *  porque o front está em outro domínio e não consegue ler o cookie
+ *  XSRF-TOKEN por JS — ver client.ts. */
+export interface UserLoginResponse {
+  csrfToken: string
+}
+
+/** GET /auth/csrf — token CSRF da sessão atual, para o boot do app. */
+export interface CsrfTokenResponse {
+  csrfToken: string
+}
 
 /** POST /auth/register — todos os campos são NOT NULL no banco (ver notas). */
 export interface UserRegisterRequest {
