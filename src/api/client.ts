@@ -26,10 +26,25 @@ export const http: AxiosInstance = axios.create({
   withCredentials: true,
   // Nomes que o Spring Security usa por padrão para o par de CSRF
   // (CookieCsrfTokenRepository): cookie legível por JS + header ecoado nas
-  // escritas. O axios lê o cookie e preenche o header sozinho a cada request
-  // que bater no mesmo domínio — não precisa de interceptor manual para isso.
+  // escritas. O axios lê o cookie e preenche o header sozinho.
   xsrfCookieName: 'XSRF-TOKEN',
   xsrfHeaderName: 'X-XSRF-TOKEN',
+  // Sem isto, o axios só manda o header quando a URL é MESMA ORIGEM do front
+  // (lib/helpers/resolveConfig.js: `withXSRFToken == null &&
+  // isURLSameOrigin(url)`). Em dev a baseURL é `/api` — mesma origem, passa. Em
+  // produção o front (byou.website) fala com outro host (a API em
+  // squareweb.app), o teste dá falso e o cookie NEM CHEGA A SER LIDO: toda
+  // escrita sai sem X-XSRF-TOKEN e o Spring corta com 403 antes de olhar
+  // permissão. Leituras seguem funcionando, então o sintoma é "só as ações
+  // falham" — upload, excluir usuário, editar perfil, logout.
+  //
+  // `true` pula o teste de origem e usa os nomes acima. Só a instância `http`
+  // recebe isso, e ela só fala com a API: o PUT ao storage (services.ts) usa
+  // axios cru e continua sem credencial nenhuma, que é o correto.
+  //
+  // O cookie XSRF-TOKEN nasce na primeira resposta da API — o GET /auth/me do
+  // boot já o materializa, antes de qualquer escrita possível pela interface.
+  withXSRFToken: true,
   timeout: 30_000,
 })
 
