@@ -21,6 +21,11 @@ export interface UserLoginRequest {
  *  porque o front está em outro domínio e não consegue ler o cookie
  *  XSRF-TOKEN por JS — ver client.ts. */
 export interface UserLoginResponse {
+  /** Token de sessão (JWT). Vem no corpo porque o cookie HttpOnly é descartado
+   *  pelo navegador em produção, onde front e API não são same-site. Guardado em
+   *  sessionStorage e enviado no header Authorization — MEDIDA TEMPORÁRIA, ver
+   *  client.ts e TOKEN_TRANSITION.md. */
+  token: string
   csrfToken: string
 }
 

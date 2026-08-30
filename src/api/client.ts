@@ -44,6 +44,64 @@ export const http: AxiosInstance = axios.create({
   timeout: 30_000,
 })
 
+/** Token de sessão em sessionStorage.
+ *
+ *  MEDIDA TEMPORÁRIA, e um recuo de segurança consciente. O certo é o cookie
+ *  HttpOnly `byou_session`, que o JS não consegue ler — um XSS não rouba o que
+ *  não alcança. Mas o cookie depende de front e API serem same-site, e hoje não
+ *  são: `byou.website` vs `squareweb.app`. O navegador trata o cookie como de
+ *  terceiros e o descarta, então toda requisição autenticada voltava 403.
+ *
+ *  O caminho definitivo é servir a API em `api.byou.website` (mesmo site do
+ *  front), que faz o cookie voltar a funcionar sem nada disto. Depende de plano
+ *  da hospedagem que permita domínio próprio. Ver TOKEN_TRANSITION.md.
+ *
+ *  `sessionStorage` e não `localStorage`: o token morre ao fechar a aba, em vez
+ *  de ficar 24h no disco. Sobrevive a refresh, que é o que importa para a
+ *  sessão continuar. Mesma exposição a XSS, janela menor.
+ *
+ *  Enquanto isto estiver de pé, um XSS em qualquer ponto do app equivale a
+ *  vazar a sessão do usuário. */
+const TOKEN_KEY = 'byou_session'
+
+/** sessionStorage lança em contextos restritos (modo privado de alguns
+ *  navegadores, cookies de site bloqueados). Falhar aqui não pode derrubar o
+ *  app: sem token o usuário só é tratado como anônimo. */
+function readStoredToken(): string | null {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+let sessionToken: string | null = readStoredToken()
+
+export function setSessionToken(token: string | null | undefined): void {
+  if (typeof token !== 'string' || token.length === 0) return
+
+  sessionToken = token
+  try {
+    sessionStorage.setItem(TOKEN_KEY, token)
+  } catch {
+    // Sem persistência o token vale só para esta carga da página; a sessão
+    // funciona e se perde no refresh. Melhor que impedir o login.
+  }
+}
+
+export function clearSessionToken(): void {
+  sessionToken = null
+  try {
+    sessionStorage.removeItem(TOKEN_KEY)
+  } catch {
+    // nada a fazer: a variável em memória já foi limpa
+  }
+}
+
+export function hasSessionToken(): boolean {
+  return sessionToken !== null
+}
+
 /** Token CSRF da sessão, mantido só em memória.
  *
  *  Não vai para localStorage de propósito: o cookie de sessão é HttpOnly
@@ -77,6 +135,16 @@ const CSRF_SAFE_METHODS = new Set(['get', 'head', 'options', 'trace'])
 http.interceptors.request.use((config) => {
   const method = (config.method ?? 'get').toLowerCase()
 
+  // O header é o que autentica em produção, onde o cookie é descartado por ser
+  // de terceiros. Onde o cookie funciona ele também vai, e o backend aceita os
+  // dois — o header tem precedência.
+  if (sessionToken) {
+    config.headers.set('Authorization', `Bearer ${sessionToken}`)
+  }
+
+  // Só faz sentido quando a sessão vem por cookie: o backend dispensa o CSRF de
+  // quem se autentica por header. Mandar junto é inofensivo e mantém o fluxo
+  // por cookie funcionando sem um segundo caminho de código.
   if (!CSRF_SAFE_METHODS.has(method) && csrfToken) {
     config.headers.set('X-XSRF-TOKEN', csrfToken)
   }
