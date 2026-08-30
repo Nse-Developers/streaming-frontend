@@ -1,5 +1,12 @@
 import axios from 'axios'
-import { ApiError, clearCsrfToken, http, setCsrfToken } from './client'
+import {
+  ApiError,
+  clearCsrfToken,
+  clearSessionToken,
+  http,
+  setCsrfToken,
+  setSessionToken,
+} from './client'
 import { safeExternalUrl } from '@/lib/validation'
 import type {
   CategoryRequest,
@@ -37,8 +44,12 @@ export const authApi = {
   async login(body: UserLoginRequest): Promise<void> {
     try {
       const { data } = await http.post<UserLoginResponse>('/auth/login', body)
+      // O token de sessão vem no corpo porque o cookie não sobrevive à política
+      // de terceiros — ver client.ts. Guardar ANTES do csrf: é ele que
+      // autentica as requisições seguintes.
+      setSessionToken(data?.token)
       // O servidor rotaciona o token CSRF ao autenticar: guardar o novo é o que
-      // faz as escritas seguintes passarem.
+      // faz as escritas seguintes passarem quando a sessão vem por cookie.
       setCsrfToken(data?.csrfToken)
     } catch (error) {
       // A API responde 403 para senha errada e 404 para e-mail inexistente.
@@ -61,9 +72,16 @@ export const authApi = {
   /** Invalida o cookie no servidor (Set-Cookie com maxAge 0). Sem isto, o
    *  front não teria como apagar um cookie HttpOnly — só o backend pode. */
   async logout() {
-    await http.post('/auth/logout')
-    // O token da sessão encerrada não serve mais; o próximo login traz outro.
-    clearCsrfToken()
+    try {
+      await http.post('/auth/logout')
+    } finally {
+      // Limpa mesmo se a chamada falhar: o usuário pediu para sair, e manter o
+      // token no storage deixaria a sessão viva no navegador dele. O JWT segue
+      // válido no servidor até expirar (não há revogação), então descartá-lo
+      // localmente é o que efetiva o logout.
+      clearSessionToken()
+      clearCsrfToken()
+    }
   },
 
   async register(body: UserRegisterRequest) {
