@@ -1,5 +1,5 @@
 import axios, { AxiosError, type AxiosInstance } from 'axios'
-import type { ExceptionResponse } from './types'
+import type { CsrfTokenResponse, ExceptionResponse } from './types'
 
 /** Em desenvolvimento usamos o proxy do Vite (`/api` -> backend, ver
  *  vite.config.ts): as requests saem para a MESMA origem do front, então não
@@ -24,28 +24,64 @@ export const http: AxiosInstance = axios.create({
   // efetivamente mandar (e aceitar) esse cookie em requests cross-origin;
   // sem isso o cookie simplesmente não vai, mesmo com CORS liberado.
   withCredentials: true,
-  // Nomes que o Spring Security usa por padrão para o par de CSRF
-  // (CookieCsrfTokenRepository): cookie legível por JS + header ecoado nas
-  // escritas. O axios lê o cookie e preenche o header sozinho.
-  xsrfCookieName: 'XSRF-TOKEN',
-  xsrfHeaderName: 'X-XSRF-TOKEN',
-  // Sem isto, o axios só manda o header quando a URL é MESMA ORIGEM do front
-  // (lib/helpers/resolveConfig.js: `withXSRFToken == null &&
-  // isURLSameOrigin(url)`). Em dev a baseURL é `/api` — mesma origem, passa. Em
-  // produção o front (byou.website) fala com outro host (a API em
-  // squareweb.app), o teste dá falso e o cookie NEM CHEGA A SER LIDO: toda
-  // escrita sai sem X-XSRF-TOKEN e o Spring corta com 403 antes de olhar
-  // permissão. Leituras seguem funcionando, então o sintoma é "só as ações
-  // falham" — upload, excluir usuário, editar perfil, logout.
+  // O par de CSRF do Spring (CookieCsrfTokenRepository) é o cookie XSRF-TOKEN
+  // + o header X-XSRF-TOKEN ecoado nas escritas. Aqui NÃO configuramos
+  // xsrfCookieName/xsrfHeaderName: eles só valem para o mecanismo nativo do
+  // axios, que depende de ler o cookie e não funciona neste cenário (abaixo).
   //
-  // `true` pula o teste de origem e usa os nomes acima. Só a instância `http`
-  // recebe isso, e ela só fala com a API: o PUT ao storage (services.ts) usa
-  // axios cru e continua sem credencial nenhuma, que é o correto.
+  // `withXSRFToken: true` faria o axios PULAR o teste de mesma origem, mas não
+  // resolve sozinho em produção: ele só anexa o header se
+  // `cookies.read('XSRF-TOKEN')` devolver valor, e isso é `document.cookie` —
+  // isolado POR ORIGEM. O cookie é setado pela API (squareweb.app), então o JS
+  // do front (byou.website) não o enxerga: a leitura dá null, o header não vai,
+  // e toda escrita volta 403. Em dev o proxy do Vite mascara (mesma origem).
   //
-  // O cookie XSRF-TOKEN nasce na primeira resposta da API — o GET /auth/me do
-  // boot já o materializa, antes de qualquer escrita possível pela interface.
-  withXSRFToken: true,
+  // Por isso o token é lido do CORPO das respostas da API e guardado em memória
+  // (ver csrfToken abaixo), e o interceptor de request o anexa. Deixamos o
+  // mecanismo nativo do axios desligado para não haver dois caminhos
+  // concorrentes escrevendo o mesmo header.
+  withXSRFToken: false,
   timeout: 30_000,
+})
+
+/** Token CSRF da sessão, mantido só em memória.
+ *
+ *  Não vai para localStorage de propósito: o cookie de sessão é HttpOnly
+ *  justamente para que um XSS não consiga roubar credencial, e persistir o
+ *  token CSRF em storage legível por JS devolveria ao atacante metade do par.
+ *  Perder o token num refresh é aceitável — o boot do app o repõe. */
+let csrfToken: string | null = null
+
+export function setCsrfToken(token: string | null | undefined): void {
+  if (typeof token === 'string' && token.length > 0) csrfToken = token
+}
+
+export function clearCsrfToken(): void {
+  csrfToken = null
+}
+
+/** Busca o token para a sessão atual. Chamado no boot e após um 403 de escrita,
+ *  que é o sintoma de token ausente ou rotacionado pelo servidor. */
+export async function refreshCsrfToken(): Promise<void> {
+  try {
+    const { data } = await http.get<CsrfTokenResponse>('/auth/csrf')
+    setCsrfToken(data?.csrfToken)
+  } catch {
+    // Sem token as escritas falham com 403 e a interface mostra o erro normal;
+    // não há o que fazer aqui além de não derrubar o boot do app.
+  }
+}
+
+const CSRF_SAFE_METHODS = new Set(['get', 'head', 'options', 'trace'])
+
+http.interceptors.request.use((config) => {
+  const method = (config.method ?? 'get').toLowerCase()
+
+  if (!CSRF_SAFE_METHODS.has(method) && csrfToken) {
+    config.headers.set('X-XSRF-TOKEN', csrfToken)
+  }
+
+  return config
 })
 
 /** Assinantes notificados quando a API rejeita a sessão (401).
