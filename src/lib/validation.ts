@@ -224,13 +224,30 @@ export type CategoryValues = z.infer<typeof categorySchema>
 
 /* --------------------------------------------------------------- upload */
 
-export const MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024 // 2 GB (backend)
-/** 2 MB — limite da API para a thumbnail (413 acima disso).
+const MB = 1024 * 1024
+const GB = 1024 * MB
+
+/** Teto do arquivo de vídeo, espelhando o limite do backend. */
+export const MAX_VIDEO_BYTES = 1 * GB
+
+/** Teto da thumbnail — o 413 da API vem acima disto.
  *
- *  Era 15 MB enquanto o vídeo também subia pela API. Com o vídeo indo direto ao
- *  storage, a thumbnail é a única coisa que passa pelo Spring e o limite dele
- *  ficou apertado. Ultrapassar aqui gasta o upload inteiro para colher 413. */
-export const MAX_THUMB_BYTES = 2 * 1024 * 1024
+ *  Com o vídeo indo direto ao storage, a thumbnail é a única coisa que passa
+ *  pelo Spring, e é o limite DELE que manda aqui. Ultrapassar gasta o upload
+ *  inteiro para colher 413. */
+export const MAX_THUMB_BYTES = 5 * MB
+
+/** Rótulos legíveis dos tetos acima.
+ *
+ *  Derivados dos bytes de propósito: os números apareciam escritos à mão na
+ *  mensagem de erro e na dica de cada dropzone, então mexer no limite exigia
+ *  lembrar de três lugares — e a interface passava a prometer um tamanho que a
+ *  validação recusava. Agora só há um número para mudar. */
+const limitLabel = (bytes: number) =>
+  bytes >= GB ? `${bytes / GB} GB` : `${bytes / MB} MB`
+
+export const MAX_VIDEO_LABEL = limitLabel(MAX_VIDEO_BYTES)
+export const MAX_THUMB_LABEL = limitLabel(MAX_THUMB_BYTES)
 
 export const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska']
 export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif']
@@ -263,7 +280,7 @@ export type UploadValues = z.infer<typeof uploadSchema>
 export function validateVideoFile(file: File | null): string | null {
   if (!file) return 'Selecione o arquivo de vídeo.'
   if (file.size === 0) return 'O arquivo está vazio.'
-  if (file.size > MAX_VIDEO_BYTES) return 'O vídeo passa de 2 GB.'
+  if (file.size > MAX_VIDEO_BYTES) return `O vídeo passa de ${MAX_VIDEO_LABEL}.`
   // Sem `file.type &&`: um tipo vazio não é mais tolerável. O contentType é
   // obrigatório no passo 1 e precisa ser video/*, então um arquivo cuja
   // extensão também não resolve tem de ser barrado ANTES do upload.
@@ -276,7 +293,7 @@ export function validateVideoFile(file: File | null): string | null {
 export function validateThumbnailFile(file: File | null): string | null {
   if (!file) return 'Selecione a imagem de capa.'
   if (file.size === 0) return 'O arquivo está vazio.'
-  if (file.size > MAX_THUMB_BYTES) return 'A imagem passa de 2 MB.'
+  if (file.size > MAX_THUMB_BYTES) return `A imagem passa de ${MAX_THUMB_LABEL}.`
   if (file.type && !ACCEPTED_IMAGE_TYPES.includes(file.type)) {
     return 'Formato não aceito. Use JPG, PNG, WebP ou AVIF.'
   }

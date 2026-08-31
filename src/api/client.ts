@@ -64,23 +64,71 @@ export const http: AxiosInstance = axios.create({
  *  vazar a sessão do usuário. */
 const TOKEN_KEY = 'byou_session'
 
+/** Instante de expiração do token, lido do claim `exp` do próprio JWT.
+ *
+ *  `null` quando o token não é um JWT legível — aí não há expiração conhecida
+ *  e o comportamento volta a ser o antigo (mandar e deixar o servidor julgar).
+ *
+ *  Ler o payload SEM verificar assinatura é seguro aqui porque o valor não
+ *  autoriza nada: serve só para o front não gastar request com uma credencial
+ *  que ele já sabe estar morta. Quem decide se a sessão vale continua sendo o
+ *  backend, sempre. */
+function readTokenExpiry(token: string): number | null {
+  const payload = token.split('.')[1]
+  if (!payload) return null
+  try {
+    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4)
+    const exp: unknown = JSON.parse(atob(padded))?.exp
+    // `exp` é em SEGUNDOS no padrão JWT (RFC 7519); o resto do front usa
+    // milissegundos. Sem o × 1000 todo token pareceria expirado em 1970.
+    return typeof exp === 'number' && Number.isFinite(exp) ? exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
+/** Folga para relógio adiantado do cliente.
+ *
+ *  A comparação é sempre contra o relógio LOCAL, que pode estar errado. A folga
+ *  erra para o lado de mandar o token mesmo assim e deixar o servidor
+ *  responder — o oposto (descartar cedo demais) desloga alguém com sessão
+ *  válida. */
+const CLOCK_SKEW_MS = 60_000
+
+function isExpired(expiresAt: number | null): boolean {
+  return expiresAt !== null && Date.now() > expiresAt + CLOCK_SKEW_MS
+}
+
 /** sessionStorage lança em contextos restritos (modo privado de alguns
  *  navegadores, cookies de site bloqueados). Falhar aqui não pode derrubar o
  *  app: sem token o usuário só é tratado como anônimo. */
 function readStoredToken(): string | null {
   try {
-    return sessionStorage.getItem(TOKEN_KEY)
+    const stored = sessionStorage.getItem(TOKEN_KEY)
+    if (!stored) return null
+    // Token vencido não volta do storage. Restaurá-lo era a origem do 403 em
+    // loop: a aba reabria "logada", toda request saía com o Bearer morto, e o
+    // backend recusava TUDO — inclusive a leitura de tela pública, que sem
+    // header nenhum funcionaria como anônima.
+    if (isExpired(readTokenExpiry(stored))) {
+      sessionStorage.removeItem(TOKEN_KEY)
+      return null
+    }
+    return stored
   } catch {
     return null
   }
 }
 
 let sessionToken: string | null = readStoredToken()
+let sessionExpiresAt: number | null = sessionToken ? readTokenExpiry(sessionToken) : null
 
 export function setSessionToken(token: string | null | undefined): void {
   if (typeof token !== 'string' || token.length === 0) return
 
   sessionToken = token
+  sessionExpiresAt = readTokenExpiry(token)
   try {
     sessionStorage.setItem(TOKEN_KEY, token)
   } catch {
@@ -91,6 +139,7 @@ export function setSessionToken(token: string | null | undefined): void {
 
 export function clearSessionToken(): void {
   sessionToken = null
+  sessionExpiresAt = null
   try {
     sessionStorage.removeItem(TOKEN_KEY)
   } catch {
@@ -99,7 +148,16 @@ export function clearSessionToken(): void {
 }
 
 export function hasSessionToken(): boolean {
-  return sessionToken !== null
+  return sessionToken !== null && !isExpired(sessionExpiresAt)
+}
+
+/** O token guardado já passou da validade que ele mesmo declara?
+ *
+ *  Serve para separar os dois 403 diferentes que este backend devolve: "sessão
+ *  morta" e "logado, mas sem o papel necessário". Ver o interceptor de
+ *  resposta. */
+export function isSessionTokenExpired(): boolean {
+  return sessionToken !== null && isExpired(sessionExpiresAt)
 }
 
 /** Token CSRF da sessão, mantido só em memória.
@@ -138,6 +196,19 @@ http.interceptors.request.use((config) => {
   // O header é o que autentica em produção, onde o cookie é descartado por ser
   // de terceiros. Onde o cookie funciona ele também vai, e o backend aceita os
   // dois — o header tem precedência.
+  //
+  // Um token já vencido é DESCARTADO em vez de enviado. Mandá-lo não
+  // reautentica nada e ainda piora o resultado: o Spring recusa a request
+  // inteira com 403 em vez de tratá-la como anônima, então até a home pública
+  // parava de carregar depois que a sessão expirava.
+  if (sessionToken && isExpired(sessionExpiresAt)) {
+    clearSessionToken()
+    clearCsrfToken()
+    // Avisa a interface na hora: sem isto o app seguiria exibindo avatar e
+    // menu de usuário até alguma request falhar e derrubar a sessão.
+    unauthorizedListeners.forEach((listener) => listener(401))
+  }
+
   if (sessionToken) {
     config.headers.set('Authorization', `Bearer ${sessionToken}`)
   }
@@ -207,13 +278,22 @@ http.interceptors.response.use(
 
     const { status, data } = error.response
 
-    // 401 sempre invalida a sessão. Um 403 NÃO invalida: neste backend ele
-    // significa tanto "sessão recusada" (cookie ausente/inválido faz a request
-    // seguir anônima) quanto "logado, mas sem o papel necessário" — e derrubar
-    // a sessão no segundo caso expulsaria o usuário de uma tela legítima.
-    // Sessão inválida no cookie é detectada no boot por AuthContext (GET /me).
-    if (status === 401) {
-      unauthorizedListeners.forEach((listener) => listener(status))
+    // 401 sempre invalida a sessão. Um 403 sozinho NÃO: neste backend ele
+    // significa tanto "sessão recusada" quanto "logado, mas sem o papel
+    // necessário" — e derrubar a sessão no segundo caso expulsaria o usuário
+    // de uma tela legítima.
+    //
+    // A exceção é o 403 com um token que JÁ passou da própria validade: aí não
+    // há ambiguidade nenhuma, é sessão morta. Era esse o caso que ficava sem
+    // tratamento e virava 403 em loop — o usuário voltava ao site horas
+    // depois, cada request levava o Bearer vencido, e nada limpava o token
+    // porque só o 401 derrubava a sessão.
+    if (status === 401 || (status === 403 && isSessionTokenExpired())) {
+      // Limpar o token aqui, e não só no listener, é o que interrompe o loop:
+      // enquanto ele seguir no storage, a request seguinte o manda de novo.
+      clearSessionToken()
+      clearCsrfToken()
+      unauthorizedListeners.forEach((listener) => listener(401))
     }
 
     // A mensagem do servidor só é exibida nos status em que ela é de NEGÓCIO
@@ -225,8 +305,13 @@ http.interceptors.response.use(
     // tabela/coluna, fragmento de SQL, caminho de classe ou host do storage — e
     // isso ia direto para a tela do usuário via toErrorMessage(). Detalhe de
     // implementação não é mensagem de erro; serve de mapa para quem sonda.
+    // 413 é a exceção dentro dos 4xx: a mensagem do backend é um texto FIXO
+    // ("...maximum allowed size of 5 GB.") compartilhado pelos dois limites, e
+    // nenhum dos dois é 5 GB. Exibi-la fazia a tela mentir o tamanho aceito.
+    // O fallback nosso é genérico de propósito; quem sabe QUAL limite estourou
+    // é o fluxo de upload, que dá a mensagem específica (ver services.ts).
     const apiMessage = typeof data?.message === 'string' ? data.message.trim() : ''
-    const trustApiMessage = status < 500
+    const trustApiMessage = status < 500 && status !== 413
     return Promise.reject(
       new ApiError(
         (trustApiMessage ? apiMessage : '') ||

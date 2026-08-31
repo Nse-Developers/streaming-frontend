@@ -9,7 +9,13 @@ import {
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { authApi } from '@/api/services'
-import { ApiError, onUnauthorized, refreshCsrfToken } from '@/api/client'
+import {
+  ApiError,
+  clearCsrfToken,
+  clearSessionToken,
+  onUnauthorized,
+  refreshCsrfToken,
+} from '@/api/client'
 import type {
   UserAuth,
   UserRegisterRequest,
@@ -100,6 +106,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // inválida — só que não deu para confirmar agora. Mantém o usuário
       // atual em vez de derrubar a sessão por um problema de conectividade.
       if (error instanceof ApiError && error.isNetworkError) return null
+
+      // Só 401/403 provam que a credencial foi RECUSADA. Um 500 aqui é falha
+      // do servidor, não sessão inválida: descartar o token nesse caso faria o
+      // usuário ter de logar de novo por causa de um erro passageiro que nem
+      // era dele. Nesses o usuário sai da tela logada, mas a credencial fica —
+      // o próximo boot tenta de novo.
+      //
+      // A checagem de `exp` do client.ts cobre o caso comum, mas só funciona
+      // se o token for um JWT legível. Aqui quem responde é o servidor, então
+      // pega também token opaco, sessão revogada antes da hora e chave trocada
+      // no backend — casos em que o `exp` ainda diria "válido".
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        clearSessionToken()
+        clearCsrfToken()
+      }
       setUser(null)
       return false
     }

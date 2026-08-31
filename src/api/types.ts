@@ -187,13 +187,24 @@ export interface VideoUploadMetadata {
   description: string
   /** Qualquer `video/*`. Define a extensão do objeto salvo no storage. */
   contentType: string
+  /** Tamanho do arquivo em bytes — `file.size` cru do input.
+   *
+   *  OBRIGATÓRIO desde a mudança de 2026-08-31: sem ele o passo 1 é rejeitado
+   *  com 413, antes mesmo de a URL ser liberada. Por isso não é opcional aqui,
+   *  mesmo sendo um campo novo — um `?` deixaria o compilador aceitar a
+   *  chamada que o servidor recusa.
+   *
+   *  Declarar menos que o arquivo real não engana ninguém: a confirmação
+   *  (passo 3) confere o tamanho de verdade no storage e derruba o vídeo. */
+  fileSize: number
 }
 
 /** Resposta de POST /video/upload-url — o passo 1 dos três do upload.
  *
- *  `uploadUrl` é uma URL ASSINADA do storage, válida por 15 minutos, e é o
- *  destino do PUT do passo 2. Ela não aponta para a API: não mandar cookie
- *  nem X-XSRF-TOKEN nesse PUT (ver `videoApi.putToStorage`). */
+ *  `uploadUrl` é uma URL ASSINADA do storage, válida por 60 minutos (30 em
+ *  ambiente local), e é o destino do PUT do passo 2. Ela não aponta para a
+ *  API: não mandar cookie nem X-XSRF-TOKEN nesse PUT (ver
+ *  `videoApi.putToStorage`). */
 export interface VideoUploadResponse {
   uploadUrl: string
   /** Id do vídeo criado como DRAFT — é o `{id}` de POST /video/{id}/confirm. */
@@ -209,10 +220,22 @@ export interface VideoUpdateStatusRequest {
 
 /** Status aceitos ao CONFIRMAR um upload (POST /video/{id}/confirm).
  *
- *  Recorte proposital de VideoStatus: o vídeo já está em DRAFT quando chega
- *  aqui, PROCESSING é reservado ao servidor e DELETED tem rota própria. Deixar
- *  o tipo largo permitiria uma tela oferecer uma opção que o backend recusa. */
-export type VideoConfirmStatus = Extract<VideoStatus, 'PUBLISHED' | 'PRIVATE'>
+ *  Recorte proposital de VideoStatus: PROCESSING é reservado ao servidor e
+ *  DELETED tem rota própria — os dois voltam 409. Deixar o tipo largo
+ *  permitiria uma tela oferecer uma opção que o backend recusa.
+ *
+ *  DRAFT entrou em 2026-08-31. Antes o confirm não o aceitava e o fluxo
+ *  simplesmente PULAVA o passo 3 para rascunhos — o que também pulava as duas
+ *  únicas verificações que o confirm faz: que o arquivo chegou mesmo ao
+ *  storage e que o tamanho real cabe no limite. Um rascunho cujo PUT falhou em
+ *  silêncio ficava salvo como se estivesse íntegro.
+ *
+ *  Os três status foram verificados contra a API rodando (2026-08-31):
+ *  PUBLISHED, DRAFT e PRIVATE respondem 200; PROCESSING e DELETED respondem
+ *  409 "The current video status does not allow this transition". A nota de
+ *  release cita só PUBLISHED e DRAFT como aceitos, mas PRIVATE passa — a lista
+ *  de lá está incompleta, não errada. */
+export type VideoConfirmStatus = Extract<VideoStatus, 'PUBLISHED' | 'DRAFT' | 'PRIVATE'>
 
 export interface CategoryRequest {
   name: string
