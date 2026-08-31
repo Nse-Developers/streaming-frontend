@@ -7,6 +7,8 @@ import {
   VolumeX,
   Maximize,
   Minimize,
+  RotateCcw,
+  RotateCw,
   VideoOff,
 } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
@@ -37,6 +39,65 @@ const MUTED_KEY = 'byou.player.muted'
  *  3s é o valor usado pelo YouTube — curto o bastante para sair da frente,
  *  longo o bastante para não sumir enquanto a mão vai até o botão. */
 const HIDE_DELAY_MS = 3000
+
+/** Salto dos botões de avançar/voltar da barra de controles.
+ *
+ *  Estes botões existem por causa do toque: as setas do teclado já davam esse
+ *  controle no desktop, mas num celular não havia NENHUMA forma de voltar
+ *  alguns segundos — só arrastar a barra de progresso, que num vídeo longo
+ *  move minutos por milímetro.
+ *
+ *  10s (e não os 5s das setas) é o passo que YouTube, Netflix e Prime usam no
+ *  toque: sem a repetição fácil de uma tecla segurada, cada toque precisa
+ *  render mais. */
+const SKIP_SECONDS = 10
+
+/** Salto das setas do teclado — passo fino, para quem pode repetir a tecla. */
+const ARROW_SKIP_SECONDS = 5
+
+/** Trava a orientação da tela enquanto o player está em tela cheia.
+ *
+ *  Um vídeo vertical (reels) numa tela cheia deitada vira duas tarjas pretas
+ *  gigantes com uma fita de imagem no meio; um vídeo 16:9 numa tela em pé
+ *  ocupa um terço do aparelho. Qual das duas é a certa depende do ARQUIVO, não
+ *  do aparelho — daí a trava seguir a proporção do vídeo.
+ *
+ *  Falha de propósito em silêncio: a API não existe no Safari, é recusada em
+ *  desktop, e o próprio sistema pode negar quando o usuário tem o bloqueio de
+ *  rotação ligado. Em todos esses casos a tela cheia continua funcionando, só
+ *  sem girar — que é exatamente o comportamento de hoje. */
+type OrientationLock = 'portrait' | 'landscape'
+
+interface LockableOrientation {
+  lock?: (orientation: OrientationLock) => Promise<void>
+  unlock?: () => void
+}
+
+function screenOrientation(): LockableOrientation | undefined {
+  return typeof screen === 'undefined'
+    ? undefined
+    : (screen.orientation as LockableOrientation | undefined)
+}
+
+function lockOrientation(mode: OrientationLock): void {
+  const orientation = screenOrientation()
+  if (typeof orientation?.lock !== 'function') return
+  // `lock` devolve uma promise que REJEITA quando não é suportado. Sem o
+  // catch isso vira "Unhandled promise rejection" no console a cada tela
+  // cheia aberta no desktop.
+  orientation.lock(mode).catch(() => {})
+}
+
+function unlockOrientation(): void {
+  const orientation = screenOrientation()
+  if (typeof orientation?.unlock !== 'function') return
+  // Ao contrário do lock, `unlock` é síncrono e LANÇA quando não suportado.
+  try {
+    orientation.unlock()
+  } catch {
+    // Sem suporte não havia trava para desfazer.
+  }
+}
 
 function loadVolume(): number {
   const raw = Number(localStorage.getItem(VOLUME_KEY))
@@ -83,11 +144,27 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
    *  "travou". `onWaiting`/`onPlaying` são os eventos que o próprio elemento
    *  emite ao esvaziar e reabastecer o buffer. */
   const [isBuffering, setIsBuffering] = useState(false)
+  /** Vídeo mais alto que largo (reels/short). Em ref, não em state: só é lido
+   *  dentro de callbacks, e um state faria o player re-renderizar à toa quando
+   *  os metadados chegam. */
+  const isPortraitVideo = useRef(false)
 
   useEffect(() => {
-    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    const onChange = () => {
+      const active = Boolean(document.fullscreenElement)
+      setIsFullscreen(active)
+      // Destrava ao sair — inclusive quando a saída não passa pelo nosso botão
+      // (Esc, gesto de voltar do Android). Sem isto o aparelho ficaria preso
+      // na orientação do último vídeo assistido, no site inteiro.
+      if (!active) unlockOrientation()
+    }
     document.addEventListener('fullscreenchange', onChange)
-    return () => document.removeEventListener('fullscreenchange', onChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange)
+      // Desmontar durante a tela cheia (navegar para outro vídeo) também
+      // precisa devolver a rotação ao aparelho.
+      unlockOrientation()
+    }
   }, [])
 
   // O <video> nasce com volume 1 e muted false: aplica o que foi lembrado
@@ -140,6 +217,26 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
   // que já saiu da tela (o usuário navegou para outro vídeo).
   useEffect(() => () => {
     if (hideTimer.current) clearTimeout(hideTimer.current)
+  }, [])
+
+  /** Alterna a tela cheia e aplica a trava de orientação.
+   *
+   *  Fica aqui em cima, entre os hooks, e não junto de `togglePlay`: é um
+   *  `useCallback`, e lá embaixo já passou do `return` de vídeo
+   *  indisponível — um hook depois de um return condicional muda a ordem dos
+   *  hooks entre renders e quebra o React quando o vídeo falha. */
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen()
+      return
+    }
+    // A trava só é aceita com a tela cheia JÁ ativa, por isso vai no `then` e
+    // não antes. Vertical continua em pé; todo o resto (16:9, 4:3, quadrado)
+    // deita, que é o que aproveita a tela do aparelho.
+    void containerRef.current
+      ?.requestFullscreen()
+      .then(() => lockOrientation(isPortraitVideo.current ? 'portrait' : 'landscape'))
+      .catch(() => {})
   }, [])
 
   /** Atalhos de teclado, no documento (como no YouTube): funcionam sem exigir
@@ -200,12 +297,15 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
         case 'ArrowLeft':
           if (onSlider) return
           event.preventDefault()
-          video.currentTime = Math.max(0, video.currentTime - 5)
+          video.currentTime = Math.max(0, video.currentTime - ARROW_SKIP_SECONDS)
           break
         case 'ArrowRight':
           if (onSlider) return
           event.preventDefault()
-          video.currentTime = Math.min(video.duration || 0, video.currentTime + 5)
+          video.currentTime = Math.min(
+            video.duration || 0,
+            video.currentTime + ARROW_SKIP_SECONDS,
+          )
           break
         case 'ArrowUp':
           if (onSlider) return
@@ -224,8 +324,9 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
           break
         case 'f':
         case 'F':
-          if (document.fullscreenElement) void document.exitFullscreen()
-          else void containerRef.current?.requestFullscreen()
+          // Mesmo caminho do botão: escrito à parte, a tecla entrava em tela
+          // cheia sem aplicar a trava de orientação.
+          toggleFullscreen()
           break
         default:
           return
@@ -237,7 +338,7 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
 
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [revealControls, canPlay])
+  }, [revealControls, canPlay, toggleFullscreen])
 
   if (!canPlay) {
     return (
@@ -282,9 +383,20 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
     else video.pause()
   }
 
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) void document.exitFullscreen()
-    else void containerRef.current?.requestFullscreen()
+  /** Avança (positivo) ou volta (negativo) no vídeo, sem passar das pontas. */
+  const skipBy = (seconds: number) => {
+    const video = videoRef.current
+    if (!video) return
+    // Antes do `loadedmetadata` a duração é NaN. Sem esta guarda o clamp
+    // usaria 0 como total e um "avançar" mandaria o vídeo para o começo.
+    if (!Number.isFinite(video.duration)) return
+    video.currentTime = Math.min(
+      Math.max(video.currentTime + seconds, 0),
+      video.duration,
+    )
+    // O salto conta como atividade: sem isto, tocar em "avançar" com os
+    // controles prestes a sumir escondia a barra logo depois do toque.
+    revealControls()
   }
 
   /** Volume vindo do slider, em 0–100. */
@@ -317,6 +429,11 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
   }
 
   const progress = duration ? currentTime / duration : 0
+
+  /** Barra de controles à mostra. Pausado ela fica fixa; tocando, some após a
+   *  inatividade. Também governa o `pointer-events` dos controles: invisível
+   *  e clicável ao mesmo tempo roubaria o toque do vídeo. */
+  const controlsVisible = showControls || !isPlaying
 
   return (
     <div
@@ -364,12 +481,21 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
         // Mesma ideia para o Picture-in-Picture do Chrome, que entra no menu
         // de contexto e no mesmo canto.
         disablePictureInPicture
-        className="h-full w-full"
+        // `object-contain`: em tela cheia o contêiner passa a ter a proporção
+        // do APARELHO, não a do arquivo (ver `.player-shell:fullscreen`). Sem
+        // isto um vídeo vertical seria esticado para preencher a tela deitada.
+        className="h-full w-full object-contain"
         onClick={togglePlay}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
-        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
+        onLoadedMetadata={(event) => {
+          setDuration(event.currentTarget.duration)
+          // `videoWidth/Height` são as dimensões REAIS do arquivo, e só
+          // existem a partir daqui — antes dos metadados valem 0.
+          const { videoWidth, videoHeight } = event.currentTarget
+          isPortraitVideo.current = videoHeight > videoWidth
+        }}
         // Única fonte de verdade do volume: o próprio elemento. Vale tanto
         // para as mudanças feitas aqui quanto para as de fora (teclas de mídia
         // do teclado, controles nativos da tela cheia).
@@ -400,29 +526,42 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
         </div>
       )}
 
+      {/* Só escurecimento, sem capturar toque: quem trata o toque nesta área é
+          o próprio <video> (`onClick={togglePlay}`), que está por baixo. O
+          botão redondo é irmão desta camada e vive no FIM do componente, para
+          ficar por cima da barra de controles. */}
       {!isPlaying && (
-        <button
-          type="button"
-          onClick={togglePlay}
-          className="absolute inset-0 flex items-center justify-center bg-black/25 transition-colors hover:bg-black/35"
-          aria-label="Reproduzir"
-        >
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-500 text-white shadow-lg transition-transform duration-200 hover:scale-105 sm:h-16 sm:w-16">
-            <Play size={26} fill="currentColor" className="ml-1" />
-          </span>
-        </button>
+        <div className="pointer-events-none absolute inset-0 bg-black/25" aria-hidden />
       )}
 
       <div
         className={cn(
           'absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-2.5 pb-2 pt-10 transition-opacity duration-200 sm:px-3 sm:pb-2.5',
+          // A CAIXA da barra é inerte; só os controles de verdade (progresso e
+          // fileira de botões) recebem toque, via `pointer-events-auto`.
+          //
+          // Sem isto, os 40px de `pt-10` — que são gradiente transparente,
+          // sem nada clicável — capturavam o toque como qualquer div. Somados
+          // ao resto, a barra media 157px de um player que no celular tem
+          // 162–254px de altura: ela cobria o botão de play central inteiro, e
+          // tocá-lo não fazia nada. Só aparecia no mobile porque no desktop o
+          // player é alto o bastante para os 157px não alcançarem o meio.
+          'pointer-events-none',
           // Invisível também precisa ficar inerte: só `opacity-0` deixaria a
           // barra capturando cliques que deveriam ir para o vídeo (e pausar).
-          showControls || !isPlaying
-            ? 'opacity-100'
-            : 'pointer-events-none opacity-0',
+          controlsVisible ? 'opacity-100' : 'opacity-0',
         )}
       >
+        {/* No toque o relógio sai da fileira de botões e ganha uma linha só
+            sua. Com os dois botões de salto, a fileira passa a ter cinco alvos
+            de 44px (o mínimo de toque): 220px + folgas, contra os ~268px que
+            sobram dentro do player a 320px de tela. O relógio de um vídeo de
+            1h ("1:02:33 / 1:45:00") come outros ~100px e empurrava "tela
+            cheia" para fora do recorte. Aqui em cima o espaço sobra. */}
+        <div className="mb-0.5 flex justify-end sm:hidden">
+          <TimeReadout current={currentTime} total={duration} />
+        </div>
+
         <div
           // A faixa clicável media 16px de altura. O trilho VISÍVEL tem 4px e
           // fica centrado nela, então a área extra já era só folga de clique —
@@ -431,7 +570,13 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
           // No toque a folga sobe para 44px; o trilho desenhado não muda de
           // tamanho (é o filho absoluto, centrado por `top-1/2`), então no
           // ponteiro fino a aparência segue idêntica.
-          className="group/bar relative mb-1 h-4 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 max-sm:h-11"
+          className={cn(
+            'group/bar relative mb-1 h-4 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 max-sm:h-11',
+            // Devolve o toque que o `pointer-events-none` do pai tirou — mas
+            // só enquanto a barra está visível, senão os controles seguiriam
+            // clicáveis invisíveis por cima do vídeo.
+            controlsVisible ? 'pointer-events-auto' : 'pointer-events-none',
+          )}
           onClick={seek}
           role="slider"
           tabIndex={0}
@@ -452,10 +597,10 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
             }
             switch (event.key) {
               case 'ArrowRight':
-                to(video.currentTime + 5)
+                to(video.currentTime + ARROW_SKIP_SECONDS)
                 break
               case 'ArrowLeft':
-                to(video.currentTime - 5)
+                to(video.currentTime - ARROW_SKIP_SECONDS)
                 break
               // O papel `slider` faz o leitor de tela prometer estas teclas;
               // sem elas, navegar um vídeo longo de 5 em 5s é inviável.
@@ -490,7 +635,23 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-0.5 text-white sm:gap-1">
+        <div
+          className={cn(
+            'flex items-center gap-0.5 text-white sm:gap-1',
+            controlsVisible ? 'pointer-events-auto' : 'pointer-events-none',
+          )}
+        >
+          {/* Voltar/avançar ladeando o play, na ordem de transporte que todo
+              player usa. Sem atalho declarado no `aria-keyshortcuts`: as setas
+              saltam 5s e estes botões 10s, então anunciar a tecla aqui
+              prometeria um resultado diferente do que ela faz. */}
+          <ControlButton
+            onClick={() => skipBy(-SKIP_SECONDS)}
+            label={`Voltar ${SKIP_SECONDS} segundos`}
+          >
+            <SkipIcon direction="back" />
+          </ControlButton>
+
           <ControlButton
             onClick={togglePlay}
             label={isPlaying ? 'Pausar' : 'Reproduzir'}
@@ -501,6 +662,13 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
             ) : (
               <Play size={19} fill="currentColor" />
             )}
+          </ControlButton>
+
+          <ControlButton
+            onClick={() => skipBy(SKIP_SECONDS)}
+            label={`Avançar ${SKIP_SECONDS} segundos`}
+          >
+            <SkipIcon direction="forward" />
           </ControlButton>
 
           {/* Volume: botão de mudo + slider. O slider se revela no hover (ou
@@ -547,12 +715,14 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
             />
           </div>
 
-          {/* shrink-0 e fonte menor no mobile: a 320px o relógio com duração de
-              1h ("1:02:33 / 1:45:00") somado ao slider de volume aberto
-              empurrava o botão de tela cheia para fora do recorte. */}
-          <span className="ml-1 shrink-0 font-mono text-[10px] tabular-nums text-white/85 sm:text-xs">
-            {formatTime(currentTime)} / {formatTime(duration)}
-          </span>
+          {/* No ponteiro fino o relógio continua na fileira: lá a largura
+              sobra, e o olho já o procura ao lado dos controles. A versão de
+              toque está acima da barra de progresso. */}
+          <TimeReadout
+            current={currentTime}
+            total={duration}
+            className="ml-1 hidden sm:block"
+          />
 
           <div className="ml-auto">
             <ControlButton
@@ -565,7 +735,70 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
           </div>
         </div>
       </div>
+
+      {/* Por último no DOM de propósito: dois elementos absolutos irmãos se
+          empilham na ordem em que aparecem, então este círculo fica ACIMA da
+          barra de controles. Era esse o bug — a barra cobria o botão e o
+          toque nunca chegava nele.
+          Só o círculo captura toque; o escurecimento ao redor é inerte e o
+          toque ali cai no <video>, que também dá play. */}
+      {!isPlaying && (
+        <button
+          type="button"
+          onClick={togglePlay}
+          aria-label="Reproduzir"
+          className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-brand-500 text-white shadow-lg transition-transform duration-200 hover:scale-105 focus-ring sm:h-16 sm:w-16"
+        >
+          <Play size={26} fill="currentColor" className="ml-1" />
+        </button>
+      )}
     </div>
+  )
+}
+
+/** Tempo decorrido e duração. Existe como componente porque aparece em dois
+ *  lugares — na fileira de botões no ponteiro fino, e numa linha própria no
+ *  toque, onde a fileira não tem largura para ele. Só um dos dois fica visível
+ *  por vez (`hidden` também o tira da árvore de acessibilidade), então não há
+ *  leitura duplicada. */
+function TimeReadout({
+  current,
+  total,
+  className,
+}: {
+  current: number
+  total: number
+  className?: string
+}) {
+  return (
+    <span
+      className={cn(
+        'shrink-0 font-mono text-[10px] tabular-nums text-white/85 sm:text-xs',
+        className,
+      )}
+    >
+      {formatTime(current)} / {formatTime(total)}
+    </span>
+  )
+}
+
+/** Seta circular com o número de segundos no meio — o desenho que YouTube e
+ *  Netflix usam para "voltar/avançar N". O número importa mais no toque, onde
+ *  não existe `title` no hover para explicar o botão. */
+function SkipIcon({ direction }: { direction: 'back' | 'forward' }) {
+  const Arrow = direction === 'back' ? RotateCcw : RotateCw
+  return (
+    <span className="relative flex items-center justify-center">
+      <Arrow size={19} />
+      {/* aria-hidden: o número já está no aria-label do botão, e sozinho
+          ("10") não diria nada a um leitor de tela. */}
+      <span
+        aria-hidden
+        className="absolute font-mono text-[8px] font-bold leading-none"
+      >
+        {SKIP_SECONDS}
+      </span>
+    </span>
   )
 }
 

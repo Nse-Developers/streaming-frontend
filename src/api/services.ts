@@ -7,7 +7,11 @@ import {
   setCsrfToken,
   setSessionToken,
 } from './client'
-import { safeExternalUrl } from '@/lib/validation'
+import {
+  MAX_THUMB_LABEL,
+  MAX_VIDEO_LABEL,
+  safeExternalUrl,
+} from '@/lib/validation'
 import type {
   CategoryRequest,
   CategoryResponse,
@@ -82,6 +86,8 @@ export const authApi = {
       clearSessionToken()
       clearCsrfToken()
     }
+    // O erro sobe de propósito: esta camada relata o que a API respondeu. Quem
+    // decide que "sair não pode falhar" é o AuthContext, que trata o erro lá.
   },
 
   async register(body: UserRegisterRequest) {
@@ -183,13 +189,27 @@ export const videoApi = {
     form.append('thumbnail', thumbnail)
     form.append('metadata', JSON.stringify(metadata))
 
-    const { data } = await http.post<VideoUploadResponse>('/video/upload-url', form, {
-      // Sem Content-Type explícito: o browser precisa gerar o boundary do
-      // multipart sozinho. Fixar 'multipart/form-data' na mão omite o
-      // boundary e o Spring não consegue separar as partes.
-      headers: { 'Content-Type': undefined },
-    })
-    return data
+    try {
+      const { data } = await http.post<VideoUploadResponse>('/video/upload-url', form, {
+        // Sem Content-Type explícito: o browser precisa gerar o boundary do
+        // multipart sozinho. Fixar 'multipart/form-data' na mão omite o
+        // boundary e o Spring não consegue separar as partes.
+        headers: { 'Content-Type': undefined },
+      })
+      return data
+    } catch (error) {
+      // Um 413 aqui é o vídeo ou a thumbnail passando do limite. O texto do
+      // backend é fixo e cita um tamanho errado (ver client.ts), então a
+      // mensagem sai daqui — e cita os DOIS limites porque a resposta não diz
+      // qual dos dois estourou.
+      if (error instanceof ApiError && error.status === 413) {
+        throw new ApiError(
+          `Arquivo grande demais. O vídeo pode ter até ${MAX_VIDEO_LABEL} e a capa até ${MAX_THUMB_LABEL}.`,
+          413,
+        )
+      }
+      throw error
+    }
   },
 
   /** Passo 2 de 3 — manda o arquivo DIRETO ao storage, sem passar pela API.
@@ -208,7 +228,11 @@ export const videoApi = {
    *     ele é parâmetro explícito, e não `file.type` lido de novo aqui: os
    *     dois passos têm que concordar sobre uma única string.
    *
-   *  Sem timeout: o arquivo pode ter gigabytes numa conexão lenta. */
+   *  Sem timeout de propósito, mesmo com a URL expirando em 60 min: o storage
+   *  valida a assinatura ao ABRIR a request, não durante, então um envio que
+   *  atravessa o prazo ainda conclui. Um teto de 60 min no cliente mataria
+   *  justamente o upload lento que terminaria bem — 1 GiB a 2 Mbps leva ~70
+   *  min. Quem interrompe é o botão de cancelar, via `signal`. */
   async putToStorage(
     uploadUrl: string,
     file: File,
@@ -251,7 +275,8 @@ export const videoApi = {
       const status = axios.isAxiosError(error) ? (error.response?.status ?? 0) : 0
       throw new ApiError(
         status === 403
-          ? // 403 aqui é assinatura inválida ou URL vencida (15 min), nunca
+          ? // 403 aqui é assinatura inválida ou URL vencida (60 min, 30 em
+            // ambiente local), nunca
             // permissão do usuário — a ação certa é refazer o envio, não pedir
             // acesso a alguém.
             'O link de envio expirou. Tente enviar o vídeo novamente.'
@@ -263,17 +288,55 @@ export const videoApi = {
 
   /** Passo 3 de 3 — confirma que o arquivo chegou e aplica o status final.
    *
-   *  A API vai ao storage checar que o objeto existe; se não achar, o vídeo
-   *  continua DRAFT. É essa checagem que impede um vídeo sem arquivo aparecer
-   *  no catálogo, então chamar isto só depois de o PUT retornar 200.
+   *  Faz DUAS verificações que não existem em nenhum outro lugar: que o objeto
+   *  existe mesmo no storage, e que o tamanho REAL do arquivo cabe no limite
+   *  (o `fileSize` do passo 1 é só uma declaração do cliente). Por isso vale
+   *  para rascunho também, e só depois de o PUT ter retornado 200.
    *
-   *  `DRAFT` não é aceito aqui (o vídeo já está nele) — ver `VideoConfirmStatus`. */
+   *  Os três status de erro daqui precisam de texto próprio: os fallbacks
+   *  genéricos por código ("Não encontramos o que você procura", "Essa ação já
+   *  foi feita antes") não dizem nada a quem acabou de esperar um upload
+   *  inteiro, e nenhum deles indica o que fazer em seguida. */
   async confirmUpload(id: number, videoStatus: VideoConfirmStatus) {
-    const { data } = await http.post<CreatedResponse>(`/video/${id}/confirm`, {
-      id,
-      videoStatus,
-    })
-    return data
+    try {
+      const { data } = await http.post<CreatedResponse>(`/video/${id}/confirm`, {
+        id,
+        videoStatus,
+      })
+      return data
+    } catch (error) {
+      if (!(error instanceof ApiError)) throw error
+
+      // O arquivo real passou do limite. O backend já apagou vídeo e
+      // thumbnail do storage e marcou o registro como DELETED — não adianta
+      // repetir o PUT, o fluxo recomeça do zero. A mensagem tem que dizer
+      // isso, senão o usuário fica tentando "de novo" num id que morreu.
+      if (error.status === 413) {
+        throw new ApiError(
+          `O arquivo enviado passa de ${MAX_VIDEO_LABEL}. O envio foi descartado — selecione um vídeo menor e comece de novo.`,
+          413,
+        )
+      }
+
+      // 404 aqui quase nunca é "id não existe": é o objeto não ter chegado ao
+      // storage. Como o PUT do passo 2 só passa daqui com 2xx, sobra a URL
+      // vencida no meio do envio.
+      if (error.status === 404) {
+        throw new ApiError(
+          'O arquivo não chegou ao servidor. Tente enviar o vídeo novamente.',
+          404,
+        )
+      }
+
+      if (error.status === 409) {
+        throw new ApiError(
+          'O servidor recusou o status escolhido para este vídeo.',
+          409,
+        )
+      }
+
+      throw error
+    }
   },
 
   /** Troca o status de um vídeo JÁ confirmado (ex.: tirar do ar).

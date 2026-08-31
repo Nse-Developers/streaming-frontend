@@ -51,9 +51,8 @@ export interface UploadVideoInput {
   metadata: VideoUploadMetadata
   file: File
   thumbnail: File
-  /** Status final aplicado no confirm. DRAFT não entra: o vídeo já nasce nele
-   *  no passo 1, e o backend recusaria a transição para o mesmo status. */
-  status: VideoConfirmStatus | 'DRAFT'
+  /** Status final aplicado no confirm. */
+  status: VideoConfirmStatus
   onPhase?: (phase: UploadPhase) => void
   onProgress?: (percent: number) => void
   signal?: AbortSignal
@@ -70,10 +69,16 @@ export interface UploadVideoInput {
  *  justamente o desenho do backend — melhor um rascunho invisível do que um
  *  vídeo publicado sem arquivo.
  *
- *  Quando o usuário escolhe "rascunho", o passo 3 é PULADO de propósito: o
- *  vídeo já está em DRAFT desde o passo 1, e o backend responde 409 a uma
- *  transição para o status atual. O custo é que o tamanho real do arquivo não
- *  fica gravado (é o confirm que faz isso) — some quando ele publicar depois. */
+ *  O passo 3 roda SEMPRE, inclusive para rascunho. Antes ele era pulado nesse
+ *  caso (o confirm não aceitava DRAFT), e junto com ele iam embora as duas
+ *  únicas verificações do fluxo: que o arquivo chegou ao storage e que o
+ *  tamanho real cabe no limite. Um rascunho cujo PUT falhou em silêncio ficava
+ *  salvo como se estivesse íntegro, e o usuário só descobriria ao publicar.
+ *
+ *  Os três status da tela (publicado, rascunho, privado) saem num confirm só —
+ *  verificado contra a API rodando. Houve aqui um contorno de duas chamadas
+ *  para PRIVATE, escrito quando a nota de release parecia excluí-lo; o teste
+ *  mostrou que ele passa direto, e a chamada extra saiu. */
 export function useUploadVideo() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -89,10 +94,8 @@ export function useUploadVideo() {
       // sobre a mesma string, ou o storage recusa com SignatureDoesNotMatch.
       await videoApi.putToStorage(uploadUrl, file, metadata.contentType, onProgress, signal)
 
-      if (status !== 'DRAFT') {
-        onPhase?.('confirming')
-        await videoApi.confirmUpload(videoId, status)
-      }
+      onPhase?.('confirming')
+      await videoApi.confirmUpload(videoId, status)
 
       onPhase?.('done')
       return videoId
