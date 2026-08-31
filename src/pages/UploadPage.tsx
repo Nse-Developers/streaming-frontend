@@ -16,6 +16,8 @@ import { toErrorMessage } from '@/api/client'
 import {
   ACCEPTED_IMAGE_TYPES,
   ACCEPTED_VIDEO_TYPES,
+  MAX_THUMB_LABEL,
+  MAX_VIDEO_LABEL,
   resolveVideoContentType,
   uploadSchema,
   validateThumbnailFile,
@@ -61,7 +63,7 @@ export function UploadPage() {
   const [progress, setProgress] = useState(0)
   const [phase, setPhase] = useState<UploadPhase>('idle')
   /** Permite abortar o PUT em andamento. O `signal` já era aceito pelo hook e
-   *  pelo serviço — só ninguém o fornecia, então um envio de até 2 GB, uma vez
+   *  pelo serviço — só ninguém o fornecia, então um envio longo, uma vez
    *  começado, não tinha como ser interrompido pela interface: o botão de
    *  cancelar ficava desabilitado e a própria tela pedia para não fechar a
    *  página. A saída era abandonar a aba. */
@@ -123,6 +125,10 @@ export function UploadPage() {
           title: values.title,
           description: values.description,
           contentType,
+          // Obrigatório desde 2026-08-31: sem ele o passo 1 volta 413. Vai o
+          // tamanho real do arquivo — declarar menos só adia a rejeição para o
+          // fim do upload, quando o backend confere o objeto no storage.
+          fileSize: file.size,
         },
         file,
         thumbnail,
@@ -188,7 +194,7 @@ export function UploadPage() {
               accept={ACCEPTED_VIDEO_TYPES.join(',')}
               file={file}
               onChange={pickVideo}
-              hint="MP4, WebM, MOV ou MKV — até 2 GB"
+              hint={`MP4, WebM, MOV ou MKV — até ${MAX_VIDEO_LABEL}`}
               icon={<Film size={26} className="text-surface-600" />}
               // Vai como prop para o erro ficar ligado ao input por
               // aria-describedby, em vez de ser um parágrafo solto ao lado.
@@ -208,7 +214,7 @@ export function UploadPage() {
               accept={ACCEPTED_IMAGE_TYPES.join(',')}
               file={thumbnail}
               onChange={pickThumbnail}
-              hint="JPG, PNG, WebP ou AVIF — até 2 MB"
+              hint={`JPG, PNG, WebP ou AVIF — até ${MAX_THUMB_LABEL}`}
               icon={<ImageIcon size={26} className="text-surface-600" />}
               showImagePreview
               error={thumbError ?? undefined}

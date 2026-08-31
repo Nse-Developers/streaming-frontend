@@ -1,8 +1,8 @@
 /** Barra de progresso do upload.
  *
  *  `role="progressbar"` com os valores ARIA: sem eles a barra era só duas divs
- *  e quem usa leitor de tela não tinha nenhuma noção de progresso num envio de
- *  até 2 GB.
+ *  e quem usa leitor de tela não tinha nenhuma noção de progresso num envio
+ *  que leva minutos.
  *
  *  A trilha usa `surface-200` e não `surface-300`: contra o preenchimento
  *  `brand-500` o par dava 2.69:1 no tema escuro, abaixo do 3:1 que a WCAG

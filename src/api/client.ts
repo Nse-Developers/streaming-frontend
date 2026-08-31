@@ -225,8 +225,13 @@ http.interceptors.response.use(
     // tabela/coluna, fragmento de SQL, caminho de classe ou host do storage — e
     // isso ia direto para a tela do usuário via toErrorMessage(). Detalhe de
     // implementação não é mensagem de erro; serve de mapa para quem sonda.
+    // 413 é a exceção dentro dos 4xx: a mensagem do backend é um texto FIXO
+    // ("...maximum allowed size of 5 GB.") compartilhado pelos dois limites, e
+    // nenhum dos dois é 5 GB. Exibi-la fazia a tela mentir o tamanho aceito.
+    // O fallback nosso é genérico de propósito; quem sabe QUAL limite estourou
+    // é o fluxo de upload, que dá a mensagem específica (ver services.ts).
     const apiMessage = typeof data?.message === 'string' ? data.message.trim() : ''
-    const trustApiMessage = status < 500
+    const trustApiMessage = status < 500 && status !== 413
     return Promise.reject(
       new ApiError(
         (trustApiMessage ? apiMessage : '') ||
