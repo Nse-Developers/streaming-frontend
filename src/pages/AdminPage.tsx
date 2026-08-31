@@ -215,12 +215,16 @@ function UsersSection() {
         <ul className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-surface-100">
           {shown.map((item) => {
             const isSelf = item.email === currentUser?.email
+            // `join` em vez de interpolar os dois: o sobrenome é opcional no
+            // cadastro, e `${name} ${surname}` deixaria um espaço solto antes da
+            // etiqueta "você" e nas iniciais do avatar.
+            const fullName = [item.name, item.surname].filter(Boolean).join(' ').trim()
             return (
               <li key={item.id} className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4">
-                <Avatar name={`${item.name} ${item.surname}`} className="h-10 w-10 text-sm" />
+                <Avatar name={fullName} className="h-10 w-10 text-sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-surface-900">
-                    {item.name} {item.surname}
+                    {fullName}
                     {isSelf && (
                       <span className="ml-2 rounded bg-surface-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-surface-600">
                         você

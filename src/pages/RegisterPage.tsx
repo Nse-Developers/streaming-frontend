@@ -216,6 +216,9 @@ export function RegisterPage() {
           </div>
         </fieldset>
 
+        {/* Sobrenome é opcional desde que o backend parou de exigi-lo. Fica no
+            mesmo par de colunas do nome: separá-lo em outra linha para sinalizar
+            "menos importante" só alongaria o formulário. */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Input
             label="Nome"
@@ -226,6 +229,7 @@ export function RegisterPage() {
           />
           <Input
             label="Sobrenome"
+            optional
             autoComplete="family-name"
             placeholder="Silva"
             error={errors.surname?.message}

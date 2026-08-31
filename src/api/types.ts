@@ -37,6 +37,10 @@ export interface CsrfTokenResponse {
 /** POST /auth/register — todos os campos são NOT NULL no banco (ver notas). */
 export interface UserRegisterRequest {
   name: string
+  /** O backend nao exige mais sobrenome. Continua `string` e nao opcional: a
+   *  coluna e NOT NULL, entao quem nao informa vai com `""` — omitir o campo
+   *  causaria 500. Todo lugar que exibe "nome + sobrenome" precisa tolerar o
+   *  vazio (ver o `join`/`filter` em AdminPage e CommentSection). */
   surname: string
   email: string
   password: string
