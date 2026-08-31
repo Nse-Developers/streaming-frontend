@@ -17,7 +17,19 @@ export function Sidebar() {
   return (
     <nav
       aria-label="Navegação principal"
-      className="hidden w-[72px] shrink-0 flex-col gap-1 px-1.5 pt-2 lg:flex"
+      // A rolagem da página levava o rail junto: descer o feed deixava a
+      // navegação para trás e voltar a ela exigia rolar tudo de volta. Preso
+      // no topo, ele acompanha a página como o Header (`sticky top-0`) já faz.
+      //
+      // `self-start` não é enfeite: como flex item, o rail esticava até a
+      // altura TOTAL da página (o `align-items: stretch` do pai). Um elemento
+      // sticky do tamanho do próprio bloco contêiner não tem para onde
+      // deslizar, e a regra não faz nada — silenciosamente. Encolhendo para
+      // `h-dvh`, sobra o resto da página para ele grudar.
+      //
+      // Tudo em `lg:` porque abaixo disso o rail nem existe: quem navega é a
+      // BottomNav, que já é `fixed`.
+      className="hidden w-[72px] shrink-0 flex-col gap-1 px-1.5 pt-2 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:self-start lg:overflow-y-auto lg:overscroll-contain"
     >
       {items.map(({ to, end, icon: Icon, label, mobileLabel }) => (
         <NavLink
