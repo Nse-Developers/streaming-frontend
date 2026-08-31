@@ -15,6 +15,8 @@ import {
   ChevronDown,
   Lock,
   ImageOff,
+  Star,
+  MessageSquare,
 } from 'lucide-react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
@@ -31,12 +33,13 @@ import {
   useUpdateCategory,
 } from '@/hooks/useCategories'
 import { useUsers, useDeleteUser } from '@/hooks/useUsers'
+import { useFeedbacks } from '@/hooks/useFeedback'
 import { useVideos, useDeleteVideo, useUpdateVideoStatus } from '@/hooks/useVideos'
 import { useToast } from '@/context/ToastContext'
 import { useAuth } from '@/context/AuthContext'
 import { toErrorMessage } from '@/api/client'
 import { categorySchema, type CategoryValues } from '@/lib/validation'
-import { formatCompact } from '@/lib/format'
+import { formatCompact, formatRelativeDate } from '@/lib/format'
 import { STATUS_LABEL, type UiVideo } from '@/lib/video'
 import type { CategoryResponse, VideoStatus } from '@/api/types'
 
@@ -44,13 +47,14 @@ export function AdminPage() {
   const users = useUsers()
   const videos = useVideos()
   const categories = useCategories()
+  const feedbacks = useFeedbacks()
 
   const totalViews = (videos.data ?? []).reduce((sum, video) => sum + (video.views ?? 0), 0)
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-16 pt-6 sm:px-6">
       <header>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-success-500/12 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-success-500">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-success-500/12 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-success-ink">
           <ShieldCheck size={12} />
           Administração
         </span>
@@ -62,7 +66,12 @@ export function AdminPage() {
         </p>
       </header>
 
-      <div className="mt-7 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* As seis métricas numa grade só. Eram duas faixas de `sm:grid-cols-4`,
+          a segunda com apenas dois cards — que a partir de `sm` ocupavam duas
+          das quatro colunas e deixavam metade da linha vazia, como se dois
+          cards tivessem falhado ao carregar. Em 3 colunas os seis fecham duas
+          linhas cheias; em 2 (mobile), três linhas cheias. */}
+      <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <Metric label="Usuários" value={users.data?.length} icon={UsersIcon} loading={users.isLoading} />
         <Metric label="Vídeos" value={videos.data?.length} icon={Film} loading={videos.isLoading} />
         <Metric
@@ -77,11 +86,37 @@ export function AdminPage() {
           icon={Tag}
           loading={categories.isLoading}
         />
+
+        {/* A nota media da plataforma so faz sentido ao lado do total de
+            avaliacoes — uma media de 5,0 vinda de UMA avaliacao nao diz o
+            mesmo que a mesma media vinda de duzentas. */}
+        <Metric
+          label="Avaliações"
+          value={feedbacks.data?.length}
+          icon={MessageSquare}
+          loading={feedbacks.isLoading}
+        />
+        <Metric
+          label="Nota média"
+          value={
+            feedbacks.data
+              ? feedbacks.data.length > 0
+                ? (
+                    feedbacks.data.reduce((sum, item) => sum + (item.rating ?? 0), 0) /
+                    feedbacks.data.length
+                  ).toFixed(1)
+                : '—'
+              : undefined
+          }
+          icon={Star}
+          loading={feedbacks.isLoading}
+        />
       </div>
 
       <UsersSection />
       <VideosSection />
       <CategoriesSection />
+      <FeedbacksSection />
     </div>
   )
 }
@@ -181,7 +216,7 @@ function UsersSection() {
           {shown.map((item) => {
             const isSelf = item.email === currentUser?.email
             return (
-              <li key={item.id} className="flex items-center gap-3 p-3 sm:p-4">
+              <li key={item.id} className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4">
                 <Avatar name={`${item.name} ${item.surname}`} className="h-10 w-10 text-sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-surface-900">
@@ -201,7 +236,7 @@ function UsersSection() {
                   // Bloqueia a auto-exclusão: o admin perderia o próprio acesso.
                   disabled={isSelf}
                   onClick={() => setPendingEmail(item.email)}
-                  className="text-danger-400 hover:bg-danger-500/10 hover:text-danger-400"
+                  className="text-danger-ink hover:bg-danger-500/10 hover:text-danger-ink"
                 >
                   <Trash2 size={16} />
                 </Button>
@@ -349,8 +384,12 @@ function VideoRow({ video }: { video: UiVideo }) {
     }
   }
 
+  // flex-wrap abaixo de sm: com thumb (80px) + 3 botões de ação (~130px) na
+  // mesma linha, sobravam ~30px para o título num viewport de 320px e a linha
+  // virava reticências — o admin não distinguia um vídeo do outro. Envolvidos,
+  // o texto fica na primeira linha e as ações na segunda.
   return (
-    <li className="flex items-center gap-3 p-3 sm:p-4">
+    <li className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4">
       {video.safeThumbnail ? (
         <img
           src={video.safeThumbnail}
@@ -375,7 +414,7 @@ function VideoRow({ video }: { video: UiVideo }) {
       {/* Sem id não há como chamar as rotas por id — mostrar botões que só
           poderiam falhar seria pior que escondê-los (ver readId em lib/video). */}
       {id != null && (
-        <div className="flex shrink-0 items-center gap-0.5">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5 max-sm:w-full max-sm:justify-end">
           {video.status !== 'PUBLISHED' && (
             <Button
               variant="ghost"
@@ -403,7 +442,7 @@ function VideoRow({ video }: { video: UiVideo }) {
             size="sm"
             aria-label={`Excluir ${video.tittle}`}
             onClick={() => setConfirmOpen(true)}
-            className="text-danger-400 hover:bg-danger-500/10 hover:text-danger-400"
+            className="text-danger-ink hover:bg-danger-500/10 hover:text-danger-ink"
           >
             <Trash2 size={15} />
           </Button>
@@ -559,7 +598,7 @@ function CategoriesSection() {
                   size="sm"
                   aria-label={`Remover ${category.name}`}
                   onClick={() => setPendingName(category.name)}
-                  className="text-danger-400 hover:bg-danger-500/10 hover:text-danger-400"
+                  className="text-danger-ink hover:bg-danger-500/10 hover:text-danger-ink"
                 >
                   <Trash2 size={15} />
                 </Button>
@@ -641,6 +680,119 @@ function CategoriesSection() {
           </Button>
         </div>
       </Modal>
+    </section>
+  )
+}
+
+/** Avaliacoes da plataforma (GET /feedback/getFeedbacks).
+ *
+ *  Fica no painel do admin porque e o unico lugar onde a resposta desta rota
+ *  faz sentido: ela devolve TUDO, sem filtro nem paginacao, com o video e o
+ *  usuario aninhados em cada item — o proprio Swagger recomenda uso
+ *  administrativo. O corte por pagina e no cliente, como nas outras secoes.
+ *
+ *  A ordenacao mais recente primeiro e feita aqui porque o backend nao ordena:
+ *  numa lista sem pagina, o que interessa ao admin e o que acabou de chegar. */
+function FeedbacksSection() {
+  const { data, isLoading, isError, error, refetch, isFetching } = useFeedbacks()
+  const [visible, setVisible] = useState(FIRST_PAGE)
+
+  // Copia antes de ordenar: `data` e o array do cache do React Query, e
+  // `sort` muta no lugar — mexer nele altera o que outras telas leem.
+  const ordered = [...(data ?? [])].sort((a, b) =>
+    (b.LastUpdate ?? '').localeCompare(a.LastUpdate ?? ''),
+  )
+  const total = ordered.length
+  const shown = ordered.slice(0, visible)
+  const remaining = total - shown.length
+
+  return (
+    <section className="mt-11">
+      <div className="mb-4 flex items-baseline justify-between gap-3">
+        <h2 className="font-display text-lg font-bold text-surface-900">Avaliações</h2>
+        {!isLoading && !isError && total > 0 && (
+          <p className="text-xs tabular-nums text-surface-600">
+            {shown.length} de {total}
+          </p>
+        )}
+      </div>
+
+      {isLoading && (
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-16 rounded-xl" />
+          ))}
+        </div>
+      )}
+
+      {isError && (
+        <EmptyState
+          icon={ServerCrash}
+          title="Não foi possível carregar as avaliações"
+          description={toErrorMessage(error)}
+          action={
+            <Button variant="secondary" onClick={() => refetch()} isLoading={isFetching}>
+              <RotateCw size={16} />
+              Tentar de novo
+            </Button>
+          }
+        />
+      )}
+
+      {!isLoading && !isError && total > 0 && (
+        <ul className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-surface-100">
+          {shown.map((feedback) => (
+            // `flex-wrap` como nas outras seções (usuários e vídeos já fazem
+            // isso): sem ele o avatar e a nota, ambos `shrink-0`, espremiam
+            // toda a compressão na coluna do meio — e as duas linhas dela são
+            // `truncate`, então a 320px a data sumia primeiro, justamente o
+            // campo por onde a lista é ordenada.
+            <li
+              key={feedback.id}
+              className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4"
+            >
+              <Avatar
+                name={`${feedback.userResponse?.name ?? ''} ${feedback.userResponse?.surname ?? ''}`.trim()}
+                className="h-9 w-9 shrink-0 text-xs"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-surface-900">
+                  {feedback.videoResponse?.tittle ?? 'Vídeo removido'}
+                </p>
+                <p className="truncate text-xs text-surface-600">
+                  {`${feedback.userResponse?.name ?? ''} ${feedback.userResponse?.surname ?? ''}`.trim() ||
+                    'Usuário removido'}
+                  {' · '}
+                  {formatRelativeDate(feedback.LastUpdate)}
+                </p>
+              </div>
+              {/* A nota e o dado principal da linha: numero + estrela, para nao
+                  depender so da cor. `aria-label` porque "4 de 5" e o que
+                  importa, nao o glifo. */}
+              <span
+                className="flex shrink-0 items-center gap-1 text-sm font-semibold tabular-nums text-surface-900"
+                aria-label={`Nota ${feedback.rating} de 5.`}
+              >
+                <Star size={14} className="fill-star-ink text-star-ink" aria-hidden="true" />
+                {feedback.rating}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {remaining > 0 && (
+        <div className="mt-3 flex justify-center">
+          <Button variant="secondary" onClick={() => setVisible((v) => v + PAGE_STEP)}>
+            Ver mais {Math.min(remaining, PAGE_STEP)}
+            <ChevronDown size={16} />
+          </Button>
+        </div>
+      )}
+
+      {!isLoading && !isError && total === 0 && (
+        <EmptyState icon={Star} title="Nenhuma avaliação ainda" />
+      )}
     </section>
   )
 }

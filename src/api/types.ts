@@ -12,10 +12,27 @@ export interface UserLoginRequest {
   password: string
 }
 
-/** POST /auth/login não devolve corpo desde a migração para cookie HttpOnly:
- *  o token vai só no header Set-Cookie, nunca no JSON (senão o cookie HttpOnly
- *  perderia o sentido — um script malicioso leria o token pela resposta). */
-export type UserLoginResponse = void
+/** POST /auth/login não devolve o token de SESSÃO no corpo: ele vai só no
+ *  header Set-Cookie (byou_session, HttpOnly), nunca no JSON — senão o HttpOnly
+ *  perderia o sentido, e um script malicioso leria a sessão pela resposta.
+ *
+ *  O corpo carrega apenas o token CSRF, que é público por natureza (vai num
+ *  header a cada escrita) e inútil sem o cookie de sessão. Ele vem no corpo
+ *  porque o front está em outro domínio e não consegue ler o cookie
+ *  XSRF-TOKEN por JS — ver client.ts. */
+export interface UserLoginResponse {
+  /** Token de sessão (JWT). Vem no corpo porque o cookie HttpOnly é descartado
+   *  pelo navegador em produção, onde front e API não são same-site. Guardado em
+   *  sessionStorage e enviado no header Authorization — MEDIDA TEMPORÁRIA, ver
+   *  client.ts e TOKEN_TRANSITION.md. */
+  token: string
+  csrfToken: string
+}
+
+/** GET /auth/csrf — token CSRF da sessão atual, para o boot do app. */
+export interface CsrfTokenResponse {
+  csrfToken: string
+}
 
 /** POST /auth/register — todos os campos são NOT NULL no banco (ver notas). */
 export interface UserRegisterRequest {
@@ -23,6 +40,14 @@ export interface UserRegisterRequest {
   surname: string
   email: string
   password: string
+  /** `YYYY-MM-DD`. Obrigatorio: o backend recusa o cadastro abaixo de 13 anos
+   *  completos (422) e responde 400 quando o campo nao vem. */
+  dateOfBirth: string
+  /** Aceite dos termos de uso e da politica de privacidade. Precisa ser `true`:
+   *  ausente, null ou false recusam o cadastro com 422. O servidor grava a
+   *  declaracao junto da versao vigente dos documentos e do instante do aceite,
+   *  entao o front precisa exibir os dois textos ANTES de marcar isto. */
+  acceptedPolicies: boolean
   bio: string
   profilePhoto: string
   state: string
@@ -60,6 +85,9 @@ export interface UserResponse {
   name: string
   surname: string
   email: string
+  /** Se o titular aceitou os termos e a politica no cadastro. Contas criadas
+   *  antes da coleta desse aceite podem vir `false`. */
+  acceptTerms: boolean
   typeAccount: UserTypeAccount
   userAuth: UserAuth
   bio: string
@@ -70,6 +98,34 @@ export interface UserResponse {
   linkYoutube: string
   linkWebsite: string
   /** ISO. Só informativo — nada na UI depende dele hoje. */
+  registrationDate: string
+}
+
+/** GET /auth/user/{id} — perfil PÚBLICO de outro usuário.
+ *
+ *  Requer sessão: SecurityConfig exige hasAnyRole("CREATORS","VIEWERS").
+ *
+ *  É um DTO MENOR que UserResponse, não o mesmo objeto: não traz `id`, `email`,
+ *  `userAuth`, `profilePhoto` nem `linkWebsite`. Isso é intencional — é o
+ *  recorte que pode ser exibido a terceiros (e-mail de outra pessoa não é
+ *  informação pública). Por isso tem tipo próprio em vez de
+ *  `Partial<UserResponse>`: o que não vem aqui não existe para a tela pública.
+ *
+ *  ATENÇÃO ao nome do id: aqui é `userId`, enquanto em UserResponse (/auth/me)
+ *  o mesmo dado se chama `id`. São records diferentes no backend — não unificar
+ *  os dois tipos por causa disso. */
+export interface PublicUserResponse {
+  /** Id do próprio usuário retornado (confirma quem é o dono do perfil). */
+  userId: number
+  name: string
+  surname: string
+  typeAccount: UserTypeAccount
+  bio: string
+  state: string
+  country: string
+  linkInstagram: string
+  linkYoutube: string
+  /** ISO sem timezone (ex.: "2026-01-15T09:00:00"). */
   registrationDate: string
 }
 
@@ -95,23 +151,68 @@ export interface VideoResponse {
   thumbnailUrl: string
   videoUrl?: string
   creatorName: string
+  /** Id do CRIADOR do vídeo (não do vídeo!), para linkar o nome ao perfil
+   *  público em /users/{userId}. Devolvido desde 2026-08-16.
+   *
+   *  Segue opcional para não quebrar contra um backend mais antigo: quando vem
+   *  undefined, a UI mostra o nome como texto simples em vez de um link que
+   *  daria 404 — ver `profilePath` em lib/video.ts.
+   *
+   *  Cuidado para não confundir com `videId`, que é o id do vídeo. Os dois são
+   *  números e ficam lado a lado; trocar um pelo outro leva ao perfil errado. */
+  userId?: number
   language: string
   uploadDate: string
   views: number
   status: VideoStatus
 }
 
+/** Campo `metadata` de POST /video/upload-url.
+ *
+ *  Vai como STRING JSON dentro do multipart (não como objeto) — a API
+ *  desserializa o texto. Ver `videoApi.requestUploadUrl`.
+ *
+ *  Mudou junto com a arquitetura de upload (2026-08-23): o DTO antigo tinha
+ *  `titulo`, `language` e `status`. Nenhum dos três existe mais aqui:
+ *   - `title` agora é em inglês e sem o "t" dobrado do VideoResponse;
+ *   - `status` saiu porque o vídeo nasce sempre DRAFT e só ganha status real
+ *     no passo 3 (confirm), depois que o arquivo comprovadamente chegou;
+ *   - `language` deixou de ser aceito.
+ *
+ *  `contentType` NÃO é decorativo: ele entra na assinatura da URL e precisa ser
+ *  byte a byte igual ao `Content-Type` do PUT do passo 2, senão o storage
+ *  recusa com SignatureDoesNotMatch. */
 export interface VideoUploadMetadata {
-  titulo: string
+  title: string
   description: string
-  status: VideoStatus
-  language: string
+  /** Qualquer `video/*`. Define a extensão do objeto salvo no storage. */
+  contentType: string
+}
+
+/** Resposta de POST /video/upload-url — o passo 1 dos três do upload.
+ *
+ *  `uploadUrl` é uma URL ASSINADA do storage, válida por 15 minutos, e é o
+ *  destino do PUT do passo 2. Ela não aponta para a API: não mandar cookie
+ *  nem X-XSRF-TOKEN nesse PUT (ver `videoApi.putToStorage`). */
+export interface VideoUploadResponse {
+  uploadUrl: string
+  /** Id do vídeo criado como DRAFT — é o `{id}` de POST /video/{id}/confirm. */
+  videoId: number
+  /** Chave do objeto no storage. Informativo; o front não precisa dela. */
+  videoKey: string
 }
 
 export interface VideoUpdateStatusRequest {
   id: number
   videoStatus: VideoStatus
 }
+
+/** Status aceitos ao CONFIRMAR um upload (POST /video/{id}/confirm).
+ *
+ *  Recorte proposital de VideoStatus: o vídeo já está em DRAFT quando chega
+ *  aqui, PROCESSING é reservado ao servidor e DELETED tem rota própria. Deixar
+ *  o tipo largo permitiria uma tela oferecer uma opção que o backend recusa. */
+export type VideoConfirmStatus = Extract<VideoStatus, 'PUBLISHED' | 'PRIVATE'>
 
 export interface CategoryRequest {
   name: string
@@ -122,15 +223,90 @@ export interface CategoryRequest {
 export type CategoryResponse = CategoryRequest
 
 export interface CommentResponse {
-  id: number
+  /** Id do PRÓPRIO comentário — alvo de POST/DELETE /commentLikes/{id}.
+   *
+   *  Chamava-se `id` até 2026-08-16. O nome novo é mais claro ao lado de
+   *  `userId` (autor), mas cuidado: os dois são números e ficam colados no
+   *  record, e trocar um pelo outro curte o comentário errado sem dar erro. */
+  commentId: number
   text: string
+  /** Nome e sobrenome do autor do comentário, em campos separados. Opcionais
+   *  porque comentários antigos, criados antes de o backend passar a devolver o
+   *  autor, podem vir sem eles. */
+  nameUser?: string
+  surnameUser?: string
+  /** Id do AUTOR do comentário (não do comentário — esse é `id`), para linkar
+   *  o nome ao perfil público. Devolvido desde 2026-08-16; opcional pela mesma
+   *  razão de `VideoResponse.userId`. */
+  userId?: number
   dataComment: string
-  version: number
   likes: number
+}
+
+/** Reacao que ACOMPANHA a nota em POST /feedback/{videoId}.
+ *
+ *  Complemento da nota, nao substituto: o backend aceita o campo ausente ou
+ *  null desde que `rating` venha. Por isso ele e opcional no request. */
+export type FeedbackReactionType = 'LIKE' | 'DISLIKE'
+
+/** POST /feedback/{videoId} — a avaliacao do usuario logado para um video.
+ *
+ *  `rating` e obrigatorio e o backend valida a faixa 1..5 (fora dela, 400).
+ *  A mesma faixa esta em `feedbackSchema` (lib/validation.ts), para o erro
+ *  aparecer no formulario antes de gastar uma request.
+ *
+ *  Cada usuario avalia um video UMA vez: a segunda tentativa responde 409. E
+ *  por isso que a UI precisa saber se ja existe avaliacao antes de oferecer o
+ *  formulario — ver `useMyVideoFeedback` (hooks/useFeedback.ts). Para trocar a
+ *  nota, apaga-se a anterior (DELETE) e envia-se outra. */
+export interface FeedbackRequest {
+  /** Inteiro de 1 a 5. */
+  rating: number
+  feedbackReactionType?: FeedbackReactionType | null
+}
+
+/** Resposta de POST /feedback/{videoId} e item de GET /feedback/getFeedbacks.
+ *
+ *  Traz o video e o usuario ANINHADOS (objetos completos, nao ids) — e o unico
+ *  jeito de saber de quem e cada avaliacao, ja que nao existe rota
+ *  `/feedback/meus` nem filtro por video.
+ *
+ *  ATENCAO aos nomes fora do padrao: `data_feedBack` (snake_case com B
+ *  maiusculo) e `LastUpdate` (PascalCase) sao os nomes REAIS serializados
+ *  pelo backend, verificados ao vivo em 2026-08-27. Escrever `lastUpdate`
+ *  aqui devolve undefined em silencio, sem erro de tipo. */
+export interface FeedbackResponse {
+  id: number
+  rating: number
+  /** Data (sem hora), formato "2026-08-27". */
+  data_feedBack: string
+  /** ISO com hora. Nome em PascalCase de proposito — ver nota do tipo. */
+  LastUpdate: string
+  feedbackReactionType: FeedbackReactionType | null
+  /** Contador de versao do JPA. Nao tem uso na UI. */
+  version: number
+  videoResponse: VideoResponse
+  userResponse: UserResponse
 }
 
 export interface NumberOfFollowersResponse {
   followers: number
+}
+
+/** GET /follow/users/{followerId}/following — quem o usuário SEGUE.
+ *  Cada item é uma aresta da relação.
+ *
+ *  É o que permite o botão "Seguir/Seguindo" saber seu estado inicial: sem esta
+ *  rota o front não teria como perguntar "eu sigo fulano?" e o botão voltaria a
+ *  "Seguir" a cada F5, mesmo para quem já é seguido.
+ *
+ *  A lista já vem filtrada por `userAlreadyFollow = true` no backend, então
+ *  quem foi deixado de seguir não aparece — não é preciso filtrar aqui. */
+export interface FollowResponse {
+  /** Quem segue — é sempre o usuário do path. */
+  followerId: number
+  /** Quem é seguido. É este que interessa: são os perfis com "Seguindo". */
+  followedId: number
 }
 
 export interface CreatedResponse {

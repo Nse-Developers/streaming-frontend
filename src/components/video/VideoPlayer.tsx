@@ -1,12 +1,52 @@
-import { useEffect, useRef, useState } from 'react'
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, VideoOff } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  Play,
+  Pause,
+  Volume1,
+  Volume2,
+  VolumeX,
+  Maximize,
+  Minimize,
+  VideoOff,
+} from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/cn'
 
 interface VideoPlayerProps {
-  /** URL do arquivo. Hoje a API não devolve este campo em VideoResponse. */
+  /** URL ASSINADA do arquivo, válida por 6 horas (ver GET /video/{id}).
+   *  Não guardar em cache nem tratar como permanente: quando expira, o
+   *  <video> falha e a saída é buscar o vídeo de novo — é o que `onRetry` faz. */
   src?: string | null
   poster?: string | null
   title?: string
+  /** Rebusca o vídeo na API para obter uma URL assinada nova. Sem isto, um
+   *  player aberto por mais de 6 horas fica morto até um F5 manual. */
+  onRetry?: () => void
+}
+
+/** Volume escolhido pelo usuário, lembrado entre vídeos e entre sessões.
+ *
+ *  Sem isto o volume voltaria a 100% a cada vídeo aberto, e quem baixou o som
+ *  uma vez levaria um susto no próximo — é o comportamento que todo player
+ *  conhecido tem. Guardado como 0–1 (a escala do elemento <video>); a UI
+ *  converte para 0–100 só na hora de exibir. */
+const VOLUME_KEY = 'byou.player.volume'
+const MUTED_KEY = 'byou.player.muted'
+
+/** Inatividade até esconder controles e cursor, com o vídeo rodando.
+ *  3s é o valor usado pelo YouTube — curto o bastante para sair da frente,
+ *  longo o bastante para não sumir enquanto a mão vai até o botão. */
+const HIDE_DELAY_MS = 3000
+
+function loadVolume(): number {
+  const raw = Number(localStorage.getItem(VOLUME_KEY))
+  // Number(null) é 0, então um storage vazio cairia em "mudo" sem o isFinite:
+  // o padrão precisa ser 100%, não silêncio.
+  return Number.isFinite(raw) && raw > 0 && raw <= 1 ? raw : 1
+}
+
+function loadMuted(): boolean {
+  return localStorage.getItem(MUTED_KEY) === 'true'
 }
 
 function formatTime(seconds: number): string {
@@ -25,17 +65,24 @@ function formatTime(seconds: number): string {
  *
  *  Quando `src` está ausente (situação atual da API), mostra a capa com um
  *  aviso claro em vez de simular uma reprodução que não existe. */
-export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
+export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  const [isMuted, setIsMuted] = useState(false)
+  const [isMuted, setIsMuted] = useState(loadMuted)
+  const [volume, setVolume] = useState(loadVolume)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [failed, setFailed] = useState(false)
+  /** Vídeo parado esperando rede. Sem isto, um stream que engasga no meio
+   *  mostrava só um quadro congelado: nada distinguia "carregando" de
+   *  "travou". `onWaiting`/`onPlaying` são os eventos que o próprio elemento
+   *  emite ao esvaziar e reabastecer o buffer. */
+  const [isBuffering, setIsBuffering] = useState(false)
 
   useEffect(() => {
     const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -43,9 +90,156 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
     return () => document.removeEventListener('fullscreenchange', onChange)
   }, [])
 
-  const unavailable = !src || failed
+  // O <video> nasce com volume 1 e muted false: aplica o que foi lembrado
+  // assim que o elemento existe. `src` na dependência porque trocar de vídeo
+  // remonta o elemento e zera essas propriedades.
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    video.volume = volume
+    video.muted = isMuted
+    // Só na montagem/troca de vídeo — durante o uso quem manda são os handlers,
+    // e reaplicar aqui a cada mudança brigaria com o arrasto do slider.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src])
 
-  if (unavailable) {
+  useEffect(() => {
+    localStorage.setItem(VOLUME_KEY, String(volume))
+    localStorage.setItem(MUTED_KEY, String(isMuted))
+  }, [volume, isMuted])
+
+  /** Mostra os controles e reinicia a contagem para escondê-los.
+   *
+   *  Chamado a cada sinal de "o usuário está aqui" (mouse, toque, tecla). O
+   *  timer anterior é sempre cancelado: sem isso, mexer o mouse por 3 segundos
+   *  agendaria dezenas de timers e o primeiro deles esconderia os controles no
+   *  meio do movimento. */
+  const revealControls = useCallback(() => {
+    setShowControls(true)
+    if (hideTimer.current) clearTimeout(hideTimer.current)
+    // Só esconde durante a reprodução: com o vídeo pausado, os controles ficam
+    // à mão (é o que o YouTube faz — some só quando há algo para assistir).
+    if (!videoRef.current?.paused) {
+      hideTimer.current = setTimeout(() => {
+        // Mover o mouse conta como atividade, mas FOCO de teclado não contava:
+        // quem tabulava até "Tela cheia" e parava 3s ficava com o foco num
+        // botão invisível (opacity-0), e o Tab seguia por elementos que ninguém
+        // vê. Enquanto o foco estiver dentro do player, os controles ficam.
+        if (containerRef.current?.contains(document.activeElement)) return
+        setShowControls(false)
+      }, HIDE_DELAY_MS)
+    }
+  }, [])
+
+  // Enquanto pausado os controles ficam fixos; ao dar play, começa a contagem.
+  useEffect(() => {
+    revealControls()
+  }, [isPlaying, revealControls])
+
+  // Limpa o timer ao desmontar: sem isto, um setState dispararia num componente
+  // que já saiu da tela (o usuário navegou para outro vídeo).
+  useEffect(() => () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current)
+  }, [])
+
+  /** Atalhos de teclado, no documento (como no YouTube): funcionam sem exigir
+   *  que o usuário clique no vídeo antes.
+   *
+   *  O cuidado central é NÃO sequestrar teclas de quem está escrevendo: a
+   *  página do vídeo tem o campo de comentário logo abaixo, e um Space que
+   *  pausasse o vídeo em vez de escrever um espaço seria muito pior do que não
+   *  ter atalho nenhum. Daí a checagem de campo editável antes de tudo. */
+  // Sem vídeo reproduzível não há o que controlar: o listener nem é registrado,
+  // senão Space continuaria sendo sequestrado numa tela que só mostra a capa.
+  const canPlay = Boolean(src) && !failed
+
+  useEffect(() => {
+    if (!canPlay) return
+
+    const isTyping = () => {
+      const el = document.activeElement
+      if (!(el instanceof HTMLElement)) return false
+      return (
+        el.tagName === 'INPUT' ||
+        el.tagName === 'TEXTAREA' ||
+        el.tagName === 'SELECT' ||
+        el.isContentEditable
+      )
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isTyping() || event.ctrlKey || event.metaKey || event.altKey) return
+      const video = videoRef.current
+      if (!video) return
+
+      // Setas ficam fora quando o foco está num controle nativo (o slider de
+      // volume e a barra de progresso já as tratam) — senão o volume mudaria
+      // duas vezes no mesmo toque.
+      const onSlider =
+        document.activeElement instanceof HTMLElement &&
+        document.activeElement.closest('[data-player-control]') !== null
+
+      // Age direto no elemento, sem chamar os handlers declarados mais abaixo:
+      // eles seriam capturados pela closure deste effect e ficariam presos ao
+      // primeiro render. `videoRef` é estável, então isto lê sempre o estado
+      // atual do vídeo.
+      const setVolumeBy = (delta: number) => {
+        const next = Math.min(Math.max(video.volume * 100 + delta, 0), 100) / 100
+        video.volume = next
+        video.muted = next === 0
+      }
+
+      switch (event.key) {
+        case ' ':
+        case 'k':
+        case 'K':
+          event.preventDefault() // Space rolaria a página
+          if (video.paused) void video.play()
+          else video.pause()
+          break
+        case 'ArrowLeft':
+          if (onSlider) return
+          event.preventDefault()
+          video.currentTime = Math.max(0, video.currentTime - 5)
+          break
+        case 'ArrowRight':
+          if (onSlider) return
+          event.preventDefault()
+          video.currentTime = Math.min(video.duration || 0, video.currentTime + 5)
+          break
+        case 'ArrowUp':
+          if (onSlider) return
+          event.preventDefault()
+          setVolumeBy(5)
+          break
+        case 'ArrowDown':
+          if (onSlider) return
+          event.preventDefault()
+          setVolumeBy(-5)
+          break
+        case 'm':
+        case 'M':
+          if (video.muted && video.volume === 0) video.volume = 0.5
+          video.muted = !video.muted
+          break
+        case 'f':
+        case 'F':
+          if (document.fullscreenElement) void document.exitFullscreen()
+          else void containerRef.current?.requestFullscreen()
+          break
+        default:
+          return
+      }
+      // Qualquer atalho conta como atividade: os controles reaparecem e o
+      // usuário vê o efeito do que acabou de apertar.
+      revealControls()
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [revealControls, canPlay])
+
+  if (!canPlay) {
     return (
       <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
         {poster && (
@@ -58,9 +252,24 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
           </p>
           <p className="max-w-sm text-xs leading-relaxed text-white/60">
             {failed
-              ? 'O arquivo não pôde ser carregado.'
-              : 'A API ainda não devolve a URL do arquivo de vídeo nesta resposta.'}
+              ? // A causa mais provável é o link assinado ter expirado (6 h),
+                // e não um arquivo corrompido — a mensagem aponta para a ação
+                // que resolve em vez de sugerir um problema permanente.
+                'O link de reprodução expirou ou o arquivo não pôde ser carregado.'
+              : 'Este vídeo ainda não tem arquivo disponível para reprodução.'}
           </p>
+          {failed && onRetry && (
+            <button
+              type="button"
+              onClick={() => {
+                setFailed(false)
+                onRetry()
+              }}
+              className="mt-1 min-h-11 rounded-lg px-4 text-xs font-semibold text-white underline underline-offset-4 hover:text-white/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              Tentar novamente
+            </button>
+          )}
         </div>
       </div>
     )
@@ -78,6 +287,27 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
     else void containerRef.current?.requestFullscreen()
   }
 
+  /** Volume vindo do slider, em 0–100. */
+  const changeVolume = (percent: number) => {
+    const video = videoRef.current
+    if (!video) return
+    const next = Math.min(Math.max(percent, 0), 100) / 100
+    video.volume = next
+    // Arrastar o slider para cima tem que tirar do mudo, senão o usuário
+    // aumenta o volume e não ouve nada. Arrastar até 0 é o inverso: equivale
+    // a silenciar.
+    video.muted = next === 0
+  }
+
+  const toggleMute = () => {
+    const video = videoRef.current
+    if (!video) return
+    // Desmutar com o volume em 0 continuaria sem som — o botão pareceria
+    // quebrado. Nesse caso devolve um volume audível junto.
+    if (video.muted && video.volume === 0) video.volume = 0.5
+    video.muted = !video.muted
+  }
+
   const seek = (event: React.MouseEvent<HTMLDivElement>) => {
     const video = videoRef.current
     if (!video || !duration) return
@@ -91,26 +321,84 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
   return (
     <div
       ref={containerRef}
-      className="group relative aspect-video w-full overflow-hidden rounded-xl bg-black"
-      onMouseEnter={() => setShowControls(true)}
+      className={cn(
+        // `player-shell` traz a regra de tela cheia (ver index.css): sem ela o
+        // aspect-video fixo deixava tarjas laterais num celular deitado (20:9).
+        'player-shell group relative aspect-video w-full overflow-hidden rounded-xl bg-black',
+        // Some com o cursor junto dos controles: em tela cheia, uma seta parada
+        // no meio do filme incomoda tanto quanto a barra.
+        !showControls && 'cursor-none',
+      )}
+      onMouseMove={revealControls}
+      onMouseEnter={revealControls}
+      // Foco entrando em qualquer controle traz a barra de volta: sem isto,
+      // tabular para dentro do player com os controles escondidos deixava o
+      // foco num elemento invisível.
+      onFocusCapture={revealControls}
+      // Sair com o vídeo rodando esconde na hora, sem esperar os 3s.
       onMouseLeave={() => isPlaying && setShowControls(false)}
+      // Em telas de toque não existe "mover o mouse": o toque é o sinal de
+      // atividade que traz os controles de volta.
+      onTouchStart={revealControls}
     >
+      {/* Os atalhos só eram descobríveis lendo o código. Aqui ficam
+          disponíveis para leitor de tela sem poluir a interface visual. */}
+      <p className="sr-only">
+        Atalhos: espaço ou K reproduz e pausa, setas esquerda e direita avançam
+        e voltam 5 segundos, setas cima e baixo ajustam o volume, M silencia, F
+        alterna tela cheia.
+      </p>
+
       <video
         ref={videoRef}
-        src={src}
+        src={src ?? undefined}
         poster={poster ?? undefined}
         title={title}
         playsInline
+        // O Chrome injeta um botão de Cast por conta própria em qualquer
+        // <video> quando há um Chromecast na rede — mesmo sem `controls`. Ele
+        // aparecia flutuando no canto, fora da nossa barra, e some junto dela
+        // no auto-hide (ficava sozinho sobre o vídeo). Sem suporte a Cast
+        // implementado de verdade, é melhor não oferecer o botão.
+        disableRemotePlayback
+        // Mesma ideia para o Picture-in-Picture do Chrome, que entra no menu
+        // de contexto e no mesmo canto.
+        disablePictureInPicture
         className="h-full w-full"
         onClick={togglePlay}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
         onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
-        onVolumeChange={(event) => setIsMuted(event.currentTarget.muted)}
+        // Única fonte de verdade do volume: o próprio elemento. Vale tanto
+        // para as mudanças feitas aqui quanto para as de fora (teclas de mídia
+        // do teclado, controles nativos da tela cheia).
+        onVolumeChange={(event) => {
+          setIsMuted(event.currentTarget.muted)
+          setVolume(event.currentTarget.volume)
+        }}
         onError={() => setFailed(true)}
         onEnded={() => setIsPlaying(false)}
+        onWaiting={() => setIsBuffering(true)}
+        onPlaying={() => {
+          setIsBuffering(false)
+          setIsPlaying(true)
+        }}
+        onCanPlay={() => setIsBuffering(false)}
       />
+
+      {/* Só enquanto o vídeo tenta tocar: parado por pausa não é buffer.
+          `pointer-events-none` para não roubar o clique de play/pause do
+          próprio vídeo, que ocupa a mesma área. */}
+      {isBuffering && isPlaying && (
+        <div
+          className="pointer-events-none absolute inset-0 flex items-center justify-center"
+          role="status"
+        >
+          <Spinner size={34} className="text-white" />
+          <span className="sr-only">Carregando o vídeo…</span>
+        </div>
+      )}
 
       {!isPlaying && (
         <button
@@ -128,23 +416,68 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
       <div
         className={cn(
           'absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-2.5 pb-2 pt-10 transition-opacity duration-200 sm:px-3 sm:pb-2.5',
-          showControls || !isPlaying ? 'opacity-100' : 'opacity-0',
+          // Invisível também precisa ficar inerte: só `opacity-0` deixaria a
+          // barra capturando cliques que deveriam ir para o vídeo (e pausar).
+          showControls || !isPlaying
+            ? 'opacity-100'
+            : 'pointer-events-none opacity-0',
         )}
       >
         <div
-          className="relative mb-1 h-4 cursor-pointer"
+          // A faixa clicável media 16px de altura. O trilho VISÍVEL tem 4px e
+          // fica centrado nela, então a área extra já era só folga de clique —
+          // mas 16px continua metade do alvo mínimo de toque, e num celular
+          // errar a barra de progresso significa tocar o vídeo e pausá-lo.
+          // No toque a folga sobe para 44px; o trilho desenhado não muda de
+          // tamanho (é o filho absoluto, centrado por `top-1/2`), então no
+          // ponteiro fino a aparência segue idêntica.
+          className="group/bar relative mb-1 h-4 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 max-sm:h-11"
           onClick={seek}
           role="slider"
           tabIndex={0}
+          data-player-control
           aria-label="Progresso do vídeo"
           aria-valuemin={0}
           aria-valuemax={Math.floor(duration)}
           aria-valuenow={Math.floor(currentTime)}
+          // Sem isto o leitor de tela anunciava só o número de segundos cru
+          // ("437"), sem unidade nem sentido.
+          aria-valuetext={`${formatTime(currentTime)} de ${formatTime(duration)}`}
           onKeyDown={(event) => {
             const video = videoRef.current
             if (!video) return
-            if (event.key === 'ArrowRight') video.currentTime += 5
-            if (event.key === 'ArrowLeft') video.currentTime -= 5
+            const total = video.duration || 0
+            const to = (seconds: number) => {
+              video.currentTime = Math.min(Math.max(seconds, 0), total)
+            }
+            switch (event.key) {
+              case 'ArrowRight':
+                to(video.currentTime + 5)
+                break
+              case 'ArrowLeft':
+                to(video.currentTime - 5)
+                break
+              // O papel `slider` faz o leitor de tela prometer estas teclas;
+              // sem elas, navegar um vídeo longo de 5 em 5s é inviável.
+              case 'PageUp':
+                to(video.currentTime + 30)
+                break
+              case 'PageDown':
+                to(video.currentTime - 30)
+                break
+              case 'Home':
+                to(0)
+                break
+              case 'End':
+                to(total)
+                break
+              default:
+                return
+            }
+            // Sem preventDefault, ArrowRight/PageDown rolavam a página ALÉM de
+            // mover o vídeo.
+            event.preventDefault()
+            revealControls()
           }}
         >
           <div className="absolute top-1/2 h-1 w-full -translate-y-1/2 rounded-full bg-white/25">
@@ -152,13 +485,17 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
               className="relative h-full rounded-full bg-brand-500"
               style={{ width: `${progress * 100}%` }}
             >
-              <span className="absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-brand-500 opacity-0 transition-opacity group-hover:opacity-100" />
+              <span className="absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-brand-500 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible/bar:opacity-100" />
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-0.5 text-white sm:gap-1">
-          <ControlButton onClick={togglePlay} label={isPlaying ? 'Pausar' : 'Reproduzir'}>
+          <ControlButton
+            onClick={togglePlay}
+            label={isPlaying ? 'Pausar' : 'Reproduzir'}
+            keyShortcut="k"
+          >
             {isPlaying ? (
               <Pause size={19} fill="currentColor" />
             ) : (
@@ -166,17 +503,54 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
             )}
           </ControlButton>
 
-          <ControlButton
-            onClick={() => {
-              const video = videoRef.current
-              if (video) video.muted = !video.muted
-            }}
-            label={isMuted ? 'Ativar som' : 'Silenciar'}
-          >
-            {isMuted ? <VolumeX size={19} /> : <Volume2 size={19} />}
-          </ControlButton>
+          {/* Volume: botão de mudo + slider. O slider se revela no hover (ou
+              no foco por teclado) para não competir com a barra de progresso,
+              e fica sempre visível no toque, onde não existe hover. */}
+          <div className="group/vol flex items-center">
+            <ControlButton
+              onClick={toggleMute}
+              label={isMuted ? 'Ativar som' : 'Silenciar'}
+              keyShortcut="m"
+            >
+              <VolumeIcon muted={isMuted} volume={volume} />
+            </ControlButton>
 
-          <span className="ml-1 font-mono text-[11px] tabular-nums text-white/85 sm:text-xs">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              // Mudo mostra a barra vazia mesmo com volume guardado: é o que o
+              // usuário está ouvindo (nada), e voltar do mudo repõe a posição.
+              value={Math.round(isMuted ? 0 : volume * 100)}
+              onChange={(event) => changeVolume(Number(event.target.value))}
+              aria-label="Volume"
+              aria-valuetext={`${Math.round(isMuted ? 0 : volume * 100)}%`}
+              // Marca para o handler global de teclado não tratar as setas de
+              // novo quando o foco já está aqui (o range as trata sozinho).
+              data-player-control
+              // O Chrome não tem pseudo-elemento para a parte preenchida do
+              // slider (só o Firefox, via ::-moz-range-progress). O gradiente
+              // com parada dura na posição atual desenha esse "já preenchido"
+              // igual nos dois — por isso vem daqui, e não do CSS.
+              style={{
+                backgroundImage: `linear-gradient(to right, #fff ${
+                  Math.round(isMuted ? 0 : volume * 100)
+                }%, rgb(255 255 255 / 0.3) ${Math.round(isMuted ? 0 : volume * 100)}%)`,
+              }}
+              // step 5 para casar com as setas do atalho global (que mexem 5%);
+              // com o padrão 1 o mesmo gesto tinha duas granularidades.
+              step={5}
+              // hidden no mobile: sem hover ele nunca se revelava, e um alvo de
+              // 0px de largura é inalcançável ao toque. Lá o botão de mudo e as
+              // teclas de volume do aparelho dão conta.
+              className="volume-slider hidden h-1 w-0 cursor-pointer opacity-0 transition-[width,opacity] duration-200 focus-visible:w-16 focus-visible:opacity-100 group-hover/vol:w-16 group-hover/vol:opacity-100 sm:block sm:group-hover/vol:w-20"
+            />
+          </div>
+
+          {/* shrink-0 e fonte menor no mobile: a 320px o relógio com duração de
+              1h ("1:02:33 / 1:45:00") somado ao slider de volume aberto
+              empurrava o botão de tela cheia para fora do recorte. */}
+          <span className="ml-1 shrink-0 font-mono text-[10px] tabular-nums text-white/85 sm:text-xs">
             {formatTime(currentTime)} / {formatTime(duration)}
           </span>
 
@@ -184,6 +558,7 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
             <ControlButton
               onClick={toggleFullscreen}
               label={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+              keyShortcut="f"
             >
               {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
             </ControlButton>
@@ -194,21 +569,41 @@ export function VideoPlayer({ src, poster, title }: VideoPlayerProps) {
   )
 }
 
+/** Ícone que reflete o nível: mudo, volume baixo ou alto. Três estados em vez
+ *  de dois porque com um ícone só o usuário não distingue "baixo" de "alto"
+ *  sem olhar o slider. */
+function VolumeIcon({ muted, volume }: { muted: boolean; volume: number }) {
+  if (muted || volume === 0) return <VolumeX size={19} />
+  if (volume < 0.5) return <Volume1 size={19} />
+  return <Volume2 size={19} />
+}
+
 function ControlButton({
   onClick,
   label,
   children,
+  /** Tecla de atalho equivalente. Vira `aria-keyshortcuts` e entra no `title`:
+   *  os atalhos existiam (espaço/K, setas, M, F) mas nada na interface dizia
+   *  que existiam. */
+  keyShortcut,
 }: {
   onClick: () => void
   label: string
   children: React.ReactNode
+  keyShortcut?: string
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-white/15 focus-ring"
+      aria-keyshortcuts={keyShortcut}
+      title={keyShortcut ? `${label} (${keyShortcut.toUpperCase()})` : label}
+      // 40px não alcançava o mínimo de toque de 44px, e estes botões ficam a
+      // 2px um do outro no mobile (`gap-0.5`) — errar o "silenciar" e acertar
+      // "tela cheia" era fácil. Mesma regra do Button `sm`: a área cresce só no
+      // toque, o desenho de 40px continua no ponteiro fino.
+      className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-white/15 focus-ring max-sm:h-11 max-sm:w-11"
     >
       {children}
     </button>

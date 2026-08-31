@@ -4,16 +4,28 @@ import { Film, SearchX, ServerCrash, RotateCw, UploadCloud, Pin, PinOff } from '
 import { useVideos } from '@/hooks/useVideos'
 import { useFeaturedVideo } from '@/hooks/useFeaturedVideo'
 import { VideoCard } from '@/components/video/VideoCard'
-import { VideoCardSkeleton } from '@/components/ui/Skeleton'
+import { LoadingRegion, VideoCardSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
 import { HeroVideo } from '@/components/video/HeroVideo'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { toErrorMessage } from '@/api/client'
+import { publicVideos } from '@/lib/video'
 
-/** Grid único usado pelo feed e pela busca — mantém o mesmo ritmo nas duas. */
-const GRID = 'grid grid-cols-1 gap-x-4 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+/** Grid único usado pelo feed e pela busca — mantém o mesmo ritmo nas duas.
+ *
+ *  A terceira coluna entra em 880px, não em `lg` (1024px). Enquanto o salto
+ *  era sm -> lg, o card ENCOLHIA quando a tela crescia: 352px a 768px, 468px a
+ *  1000px (duas colunas larguíssimas) e de repente 291px a 1024px, porque a
+ *  terceira coluna e o rail de 72px entravam no mesmo ponto. Num app de vídeo
+ *  a capa é o conteúdo — ela não pode diminuir num monitor maior.
+ *
+ *  A quinta coluna acima de 1700px existe porque o container trava em 1600px:
+ *  sem ela, 4 colunas de 376px ficam desproporcionalmente grandes num monitor
+ *  de 2560px. */
+const GRID =
+  'grid grid-cols-1 gap-x-4 gap-y-7 sm:grid-cols-2 min-[880px]:grid-cols-3 xl:grid-cols-4 min-[1700px]:grid-cols-5'
 
 export function HomePage() {
   const { data: videos, isLoading, isError, error, refetch, isFetching } = useVideos()
@@ -24,10 +36,8 @@ export function HomePage() {
   const search = rawSearch.toLowerCase()
 
   // Busca no cliente: a API não tem endpoint de busca, e a lista já vem inteira.
-  const published = useMemo(
-    () => (videos ?? []).filter((video) => video.status === 'PUBLISHED'),
-    [videos],
-  )
+  // O recorte de visibilidade vem de lib/video.ts (ponto único da regra).
+  const published = useMemo(() => publicVideos(videos), [videos])
 
   const filtered = useMemo(() => {
     if (!search) return published
@@ -40,14 +50,17 @@ export function HomePage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-[1600px] px-4 pb-12 pt-5 sm:px-6">
-        <div className="skeleton mb-9 aspect-[16/9] w-full rounded-xl sm:aspect-[21/9] lg:aspect-[2.6/1]" />
+      <LoadingRegion label="Carregando vídeos…" className="mx-auto max-w-[1600px] px-4 pb-12 pt-5 sm:px-6">
+        <div
+          aria-hidden="true"
+          className="skeleton mb-9 aspect-[16/9] w-full rounded-xl sm:aspect-[21/9] min-[880px]:aspect-[2.6/1] lg:aspect-[2.8/1]"
+        />
         <div className={GRID}>
           {Array.from({ length: 8 }).map((_, index) => (
             <VideoCardSkeleton key={index} />
           ))}
         </div>
-      </div>
+      </LoadingRegion>
     )
   }
 
@@ -55,6 +68,7 @@ export function HomePage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
         <EmptyState
+          headingLevel="h1"
           icon={ServerCrash}
           title="Não foi possível carregar os vídeos"
           description={toErrorMessage(error)}
@@ -75,6 +89,7 @@ export function HomePage() {
         {filtered.length === 0 ? (
           <div className="mx-auto max-w-2xl py-16">
             <EmptyState
+              headingLevel="h1"
               icon={SearchX}
               title={`Nada encontrado para "${rawSearch}"`}
               description="Tente outro termo ou confira a escrita."
@@ -82,7 +97,11 @@ export function HomePage() {
           </div>
         ) : (
           <>
-            <p className="mb-5 text-sm text-surface-600">
+            <h1 className="sr-only">Resultados da busca</h1>
+            {/* role=status: a contagem muda a cada tecla digitada na busca e o
+                grid é substituído em silêncio. Assim o leitor de tela recebe
+                "12 resultados para X" sem precisar sair e voltar. */}
+            <p role="status" className="mb-5 text-sm text-surface-600">
               {filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'} para{' '}
               <span className="font-medium text-surface-900">“{rawSearch}”</span>
             </p>
@@ -101,6 +120,7 @@ export function HomePage() {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
         <EmptyState
+          headingLevel="h1"
           icon={Film}
           title="Ainda não há vídeos publicados"
           description={
@@ -146,7 +166,7 @@ export function HomePage() {
                       pick(null)
                       showToast('Destaque liberado — volta a mostrar o mais recente.', 'info')
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-900 focus-ring"
+                    className="-m-1 inline-flex items-center gap-1.5 rounded-md p-2 text-xs font-medium text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-900 focus-ring"
                   >
                     <PinOff size={12} />
                     Remover
@@ -157,7 +177,7 @@ export function HomePage() {
                   Mostrando o vídeo mais recente. Use “Destacar” num card abaixo para fixar outro.
                 </span>
               )}
-              <span className="text-xs text-surface-500">Vale só neste navegador.</span>
+              <span className="text-xs text-surface-600">Vale só neste navegador.</span>
             </div>
           )}
         </section>
@@ -165,9 +185,12 @@ export function HomePage() {
 
       {rest.length > 0 && (
         <>
-          <h2 className="mb-4 font-display text-base font-bold text-surface-900">
+          {/* h1 da home. Visualmente é o mesmo título de seção de antes, mas
+              como h1: era a única página que começava em h2, e quem navega por
+              headings chegava na tela principal sem ponto de entrada. */}
+          <h1 className="mb-4 font-display text-base font-bold text-surface-900">
             Vídeos recentes
-          </h2>
+          </h1>
           <div className={GRID}>
             {rest.map((video) => (
               <VideoCard
@@ -181,7 +204,7 @@ export function HomePage() {
                         pick(video.id!)
                         showToast(`“${video.tittle}” agora é o destaque.`, 'success')
                       }}
-                      className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-900 focus-ring"
+                      className="-m-1 inline-flex items-center gap-1.5 rounded-md p-2 text-xs font-medium text-surface-600 transition-colors hover:bg-surface-200 hover:text-surface-900 focus-ring"
                     >
                       <Pin size={12} />
                       Destacar

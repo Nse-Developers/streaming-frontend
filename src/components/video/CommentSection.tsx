@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ThumbsUp, MessageSquare, ServerCrash } from 'lucide-react'
 import { Avatar } from '@/components/ui/Avatar'
+import { UserLink, UserAvatarLink } from '@/components/user/UserLink'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -80,20 +81,44 @@ export function CommentSection({ videoId }: { videoId: number }) {
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="mb-8 flex gap-3">
           <Avatar name={user?.name ?? '?'} />
           <div className="min-w-0 flex-1">
-            <input
+            {/* <textarea> e não <input>: o comentário é renderizado abaixo com
+                `whitespace-pre-wrap`, ou seja, quebras de linha são exibidas —
+                mas um <input> não permite digitá-las. Somado ao limite de 1000
+                caracteres, escrever um texto longo significava rolar
+                horizontalmente por uma linha de ~28px de altura.
+                `rows=2` também resolve o alvo de toque, que estava abaixo dos
+                44px mínimos. Enter envia (como antes); Shift+Enter quebra a
+                linha, que é a convenção de caixa de comentário. */}
+            <textarea
               {...register('text')}
+              rows={2}
               placeholder="Adicione um comentário…"
               aria-label="Novo comentário"
               maxLength={1000}
-              className="w-full border-b border-surface-300 bg-transparent pb-2 text-sm text-surface-900 placeholder:text-surface-600 transition-colors focus:border-brand-400 focus:outline-none"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  void handleSubmit(onSubmit)()
+                }
+              }}
+              className="w-full resize-y border-b border-surface-300 bg-transparent pb-2 text-sm leading-relaxed text-surface-900 placeholder:text-surface-600 transition-colors focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400"
             />
             {errors.text && (
-              <p className="mt-1.5 text-xs font-medium text-danger-400">{errors.text.message}</p>
+              <p className="mt-1.5 text-xs font-medium text-danger-ink">{errors.text.message}</p>
             )}
             {text.trim().length > 0 && (
               <div className="mt-3 flex items-center justify-end gap-2">
-                <span className="mr-auto text-xs tabular-nums text-surface-500">
-                  {text.length}/1000
+                <span
+                  className="mr-auto text-xs tabular-nums text-surface-600"
+                  // O contador só aparece depois de digitar, então avisa o teto
+                  // enquanto ainda há folga — e vira alerta perto do limite, em
+                  // vez de o texto simplesmente parar de entrar.
+                  aria-live="polite"
+                >
+                  <span className={text.length > 900 ? 'font-semibold text-danger-ink' : undefined}>
+                    {text.length}
+                  </span>
+                  /1000
                 </span>
                 <Button type="button" variant="ghost" size="sm" onClick={() => reset({ text: '' })}>
                   Cancelar
@@ -143,14 +168,28 @@ export function CommentSection({ videoId }: { videoId: number }) {
       {!isLoading && !isError && comments && comments.length > 0 && (
         <ul className="space-y-6">
           {comments.map((comment) => {
-            const liked = likedIds.has(comment.id)
+            const liked = likedIds.has(comment.commentId)
+            // O backend manda nome e sobrenome separados; o join descarta o que
+            // vier vazio para não sobrar espaço solto nas iniciais do avatar.
+            const authorName = [comment.nameUser, comment.surnameUser]
+              .filter(Boolean)
+              .join(' ')
+              .trim()
             return (
-              <li key={comment.id} className="flex gap-3">
-                {/* A API não devolve o autor do comentário, apenas o texto. */}
-                <Avatar name="?" />
+              <li key={comment.commentId} className="flex gap-3">
+                <UserAvatarLink userId={comment.userId} name={authorName}>
+                  <Avatar name={authorName || '?'} />
+                </UserAvatarLink>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-surface-600">
-                    {formatRelativeDate(comment.dataComment) || 'agora'}
+                  <p className="flex flex-wrap items-center gap-x-2 text-xs text-surface-600">
+                    {authorName && (
+                      <UserLink
+                        userId={comment.userId}
+                        name={authorName}
+                        className="font-medium text-surface-900"
+                      />
+                    )}
+                    <span>{formatRelativeDate(comment.dataComment) || 'agora'}</span>
                   </p>
                   {/* Texto sempre como conteúdo, nunca HTML: React escapa por padrão. */}
                   <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-surface-800">
@@ -159,9 +198,19 @@ export function CommentSection({ videoId }: { videoId: number }) {
                   <button
                     type="button"
                     disabled={!isAuthenticated}
-                    onClick={() => onToggleLike(comment.id)}
+                    // Deslogado, o botão só ficava cinza e inerte, sem dizer
+                    // por quê. O `title` explica no ponteiro; o `aria-label`
+                    // leva o mesmo motivo a quem usa leitor de tela, já que um
+                    // botão desabilitado não é alcançável pela navegação.
+
+                    title={isAuthenticated ? undefined : 'Entre para curtir'}
+                    aria-label={isAuthenticated ? undefined : 'Curtir — entre na sua conta'}
+                    onClick={() => onToggleLike(comment.commentId)}
                     className={cn(
-                      'mt-2 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium transition-colors focus-ring disabled:cursor-not-allowed disabled:opacity-50',
+                      // p-2 -m-1 amplia a área de toque de ~26px para ~40px sem
+                      // deslocar nada no layout — e no toque o mínimo de 44px
+                      // fecha os 4px que ainda faltavam.
+                      'mt-2 -m-1 inline-flex items-center gap-1.5 rounded-md p-2 text-xs font-medium transition-colors focus-ring disabled:cursor-not-allowed disabled:opacity-50 max-sm:min-h-[44px] max-sm:min-w-[44px] max-sm:justify-center',
                       liked
                         ? 'text-brand-link'
                         : 'text-surface-600 hover:bg-surface-200 hover:text-surface-800',

@@ -1,4 +1,4 @@
-import { forwardRef, type SelectHTMLAttributes } from 'react'
+import { forwardRef, useId, type SelectHTMLAttributes } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
@@ -9,7 +9,10 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ label, error, id, className, children, ...props }, ref) => {
-    const selectId = id ?? props.name
+    const generatedId = useId()
+    const selectId = id ?? props.name ?? generatedId
+    // Liga a mensagem de erro ao campo — ver comentário em Input.tsx.
+    const msgId = `${selectId}-msg`
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
@@ -27,13 +30,18 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               className,
             )}
             aria-invalid={Boolean(error)}
+            aria-describedby={error ? msgId : undefined}
             {...props}
           >
             {children}
           </select>
           <ChevronDown size={16} className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-surface-600" />
         </div>
-        {error && <p className="text-xs font-medium text-danger-400">{error}</p>}
+        {error && (
+          <p id={msgId} className="text-xs font-medium text-danger-ink">
+            {error}
+          </p>
+        )}
       </div>
     )
   },
