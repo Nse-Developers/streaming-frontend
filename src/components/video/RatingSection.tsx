@@ -221,31 +221,47 @@ export function RatingSection({ videoId }: { videoId: number }) {
             ))}
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          {/* Empilha no estreito, em linha a partir de `sm`.
+              Com `flex-wrap` + `ml-auto` os três botões somavam ~348px contra
+              os ~311px que o cartão tem a 375px de tela: "Enviar avaliação"
+              caía para a segunda linha e o `ml-auto` o encostava na borda
+              direita, sozinho, sob dois botões alinhados à esquerda. Quebrar
+              de propósito, em vez de deixar a linha estourar, é o que alinha. */}
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             {/* A reação COMPLEMENTA a nota (o backend aceita ausente/null), não
                 a substitui. Clicar de novo desmarca. */}
-            <Button
-              variant={reaction === 'LIKE' ? 'primary' : 'secondary'}
-              size="sm"
-              aria-pressed={reaction === 'LIKE'}
-              onClick={() => setReaction((prev) => (prev === 'LIKE' ? null : 'LIKE'))}
-            >
-              <ThumbsUp size={15} aria-hidden="true" />
-              Gostei
-            </Button>
-            <Button
-              variant={reaction === 'DISLIKE' ? 'primary' : 'secondary'}
-              size="sm"
-              aria-pressed={reaction === 'DISLIKE'}
-              onClick={() => setReaction((prev) => (prev === 'DISLIKE' ? null : 'DISLIKE'))}
-            >
-              <ThumbsDown size={15} aria-hidden="true" />
-              Não gostei
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant={reaction === 'LIKE' ? 'primary' : 'secondary'}
+                size="sm"
+                // `flex-1` no estreito para os dois dividirem a linha em partes
+                // iguais: com a largura natural, "Gostei" e "Não gostei" têm
+                // tamanhos diferentes e sobra um vão à direita.
+                className="flex-1 sm:flex-none"
+                aria-pressed={reaction === 'LIKE'}
+                onClick={() => setReaction((prev) => (prev === 'LIKE' ? null : 'LIKE'))}
+              >
+                <ThumbsUp size={15} aria-hidden="true" />
+                Gostei
+              </Button>
+              <Button
+                variant={reaction === 'DISLIKE' ? 'primary' : 'secondary'}
+                size="sm"
+                className="flex-1 sm:flex-none"
+                aria-pressed={reaction === 'DISLIKE'}
+                onClick={() => setReaction((prev) => (prev === 'DISLIKE' ? null : 'DISLIKE'))}
+              >
+                <ThumbsDown size={15} aria-hidden="true" />
+                Não gostei
+              </Button>
+            </div>
 
+            {/* Sem largura declarada: no estreito o `align-items: stretch` da
+                coluna já o deixa da largura do cartão — a ação principal em
+                barra cheia embaixo, que é o padrão de formulário no celular. */}
             <Button
               size="sm"
-              className="ml-auto"
+              className="sm:ml-auto"
               onClick={submit}
               disabled={rating < 1}
               isLoading={give.isPending}
