@@ -146,18 +146,57 @@ export function RegisterPage() {
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
-        {/* Tipo de conta primeiro: define o que o usuário poderá fazer. */}
-        <fieldset>
-          <legend className="mb-2 text-sm font-medium text-surface-700">Como você vai usar?</legend>
+        {/* Tipo de conta primeiro: define o que o usuário poderá fazer.
+
+            O bloco INTEIRO ganha moldura, fundo próprio e a cor de accent
+            porque muita gente passava batido e criava conta de espectador sem
+            querer. Antes ele era um `radiogroup` solto usando `brand-500`, a
+            mesma cor de todo o resto do formulário (campos, links, o botão de
+            enviar): lido de cima para baixo, parecia mais um campo, não uma
+            escolha que muda o que a conta pode fazer.
+            A menta é o token reservado do tema justamente para "selo de
+            estado" — complementar ao azul e nunca usada em ação, então
+            destacar com ela não cria uma segunda cor de "clicável".
+
+            Um <div> e não <fieldset>/<legend>: o <legend> nativo se posiciona
+            SOBRE a borda de cima e encolhe ao conteúdo, o que quebrava o
+            enquadramento no celular (o selo caía para uma segunda linha e o
+            título saía por cima da moldura), e devolvê-lo ao fluxo com
+            `float`/`w-full` conflitava com o grid dos cartões. O papel
+            semântico fica com `role="radiogroup"` + `aria-labelledby`, que é o
+            que o leitor de tela usa para nomear o grupo. */}
+        <div className="rounded-xl border border-accent-ink/35 bg-accent-ink/[0.06] p-3.5 sm:p-4">
+          <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-surface-800">
+            {/* O id fica no <span> da pergunta, e nao no <p> que envolve tudo:
+                apontado para o <p>, o nome do grupo saia como "Como voce vai
+                usar?Escolha uma" — o texto do selo colado sem espaco. */}
+            <span id="rotulo-tipo-conta">Como você vai usar?</span>
+            {/* "Escolha uma" em vez de "obrigatório": o grupo já vem com uma
+                opção marcada, então o que falta não é preencher, é CONFERIR se
+                a marcada é a certa.
+                Borda em vez de fundo tingido: medido, a menta sobre o proprio
+                tint dava 3.99:1 no tema claro (abaixo do minimo 4.5:1 da WCAG
+                AA) em TODOS os alfas testados, porque o token claro (#0f7a5c) e
+                proximo demais da sua propria mistura. Sem fundo, sobe para
+                4.89:1 no claro e 9.35:1 no escuro. */}
+            <span className="rounded-full border border-accent-ink/50 px-2 py-0.5 text-[11px] font-medium leading-tight text-accent-ink">
+              Escolha uma
+            </span>
+          </p>
           {/* Escolha ÚNICA, então `radiogroup` e não dois botões de alternância:
               com `aria-pressed` o leitor de tela anunciava dois toggles
               independentes ("pressionado"/"não pressionado"), sem dizer que
               marcar um desmarca o outro nem quantas opções existem.
               Mesmo padrão já usado nas estrelas do RatingSection: roving
               tabindex (o grupo é UMA parada de Tab) e setas para navegar. */}
-          {/* Sem `aria-label` aqui: o <legend> do fieldset já nomeia o grupo, e
-              os dois juntos fariam o leitor anunciar o mesmo texto duas vezes. */}
-          <div role="radiogroup" className="grid gap-2.5 sm:grid-cols-2">
+          {/* `aria-labelledby` aponta para o <p> acima: sem <fieldset>/<legend>,
+              e ele que nomeia o grupo para o leitor de tela. Um `aria-label`
+              junto faria o mesmo texto ser anunciado duas vezes. */}
+          <div
+            role="radiogroup"
+            aria-labelledby="rotulo-tipo-conta"
+            className="grid gap-2.5 sm:grid-cols-2"
+          >
             {ACCOUNT_TYPES.map(({ value, icon: Icon, label, hint }, index) => {
               const selected = accountType === value
               return (
@@ -183,16 +222,27 @@ export function RegisterPage() {
                   }}
                   onClick={() => setValue('userTypeAccount', value, { shouldValidate: true })}
                   className={cn(
-                    'flex items-start gap-3 rounded-xl border p-3.5 text-left transition-colors duration-150 focus-ring',
+                    // `bg-surface-100`: os cartões ficam sobre o fundo tingido
+                    // do bloco, então precisam de um fundo opaco próprio para
+                    // não virarem duas manchas de menta sobre menta.
+                    'flex items-start gap-3 rounded-xl border bg-surface-100 p-3.5 text-left transition-colors duration-150 focus-ring',
                     selected
-                      ? 'border-brand-500 bg-brand-500/8'
+                      // `ring` além da borda: a borda de 1px sozinha era sutil
+                      // demais para dizer QUAL das duas está marcada, e era esse
+                      // o relato — gente que criava conta de espectador sem ver
+                      // que havia escolha.
+                      ? 'border-accent-ink bg-accent-ink/10 ring-1 ring-accent-ink'
                       : 'border-surface-300 hover:border-surface-400',
                   )}
                 >
                   <span
                     className={cn(
                       'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                      selected ? 'bg-brand-500 text-white' : 'bg-surface-200 text-surface-600',
+                      // Texto escuro sobre a menta, não branco: o token do tema
+                      // escuro (#4de3b4) é um verde CLARO, e branco em cima dava
+                      // 1.9:1. `surface-0` é o fundo da página nos dois temas,
+                      // então acompanha a inversão junto com a menta.
+                      selected ? 'bg-accent-ink text-surface-0' : 'bg-surface-200 text-surface-600',
                     )}
                   >
                     <Icon size={15} />
@@ -201,12 +251,16 @@ export function RegisterPage() {
                     <span
                       className={cn(
                         'block text-sm font-semibold',
-                        selected ? 'text-brand-link' : 'text-surface-900',
+                        selected ? 'text-accent-ink' : 'text-surface-900',
                       )}
                     >
                       {label}
                     </span>
-                    <span className="mt-0.5 block text-xs leading-snug text-surface-600">
+                    {/* `surface-700` e nao `surface-600`: sobre o fundo do
+                        cartao SELECIONADO (menta a 10%) o 600 caia para 3.74:1
+                        no tema escuro. O 700 da 5.60:1 no escuro e 8.11:1 no
+                        claro — passa nos dois. */}
+                    <span className="mt-0.5 block text-xs leading-snug text-surface-700">
                       {hint}
                     </span>
                   </span>
@@ -214,7 +268,7 @@ export function RegisterPage() {
               )
             })}
           </div>
-        </fieldset>
+        </div>
 
         {/* Sobrenome é opcional desde que o backend parou de exigi-lo. Fica no
             mesmo par de colunas do nome: separá-lo em outra linha para sinalizar
