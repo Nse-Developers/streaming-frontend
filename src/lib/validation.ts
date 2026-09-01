@@ -46,6 +46,11 @@ export const passwordSchema = z
   .regex(/[0-9]/, 'Inclua um número.')
   .regex(/[^A-Za-z0-9]/, 'Inclua um símbolo (ex.: @, #, !).')
 
+const NAME_CHARS = /^[\p{L}][\p{L}\s'-]*$/u
+/** Mensagem única para os dois esquemas de nome: a regra de caracteres é a
+ *  mesma no obrigatório e no opcional. */
+const NAME_CHARS_MESSAGE = 'Use apenas letras, espaço, hífen e apóstrofo.'
+
 const nameSchema = z
   .string()
   .transform(oneLine)
@@ -55,7 +60,24 @@ const nameSchema = z
       .min(2, 'Mínimo de 2 caracteres.')
       .max(60, 'Máximo de 60 caracteres.')
       // Só letras (com acento), espaço, hífen e apóstrofo: nada de < > / etc.
-      .regex(/^[\p{L}][\p{L}\s'-]*$/u, 'Use apenas letras, espaço, hífen e apóstrofo.'),
+      .regex(NAME_CHARS, NAME_CHARS_MESSAGE),
+  )
+
+/** Nome que pode ficar em branco — o sobrenome, desde que o backend deixou de
+ *  exigi-lo. Vazio passa; preenchido cai nas MESMAS regras do obrigatório, para
+ *  que "A" ou "<script>" continuem sendo reprovados.
+ *
+ *  A string vazia é preservada em vez de virar `undefined`: a coluna é NOT NULL
+ *  no banco, então o payload precisa levar `""` e não omitir o campo. */
+const optionalNameSchema = z
+  .string()
+  .transform(oneLine)
+  .pipe(
+    z
+      .string()
+      .max(60, 'Máximo de 60 caracteres.')
+      .refine((value) => value === '' || value.length >= 2, 'Mínimo de 2 caracteres.')
+      .refine((value) => value === '' || NAME_CHARS.test(value), NAME_CHARS_MESSAGE),
   )
 
 /** Só http(s). Rejeita javascript:/data: — que seriam XSS ao virar href/src. */
@@ -126,7 +148,8 @@ const dateOfBirthSchema = z
 export const registerSchema = z
   .object({
     name: nameSchema,
-    surname: nameSchema,
+    // Opcional desde que o backend parou de exigir sobrenome no cadastro.
+    surname: optionalNameSchema,
     email: emailSchema,
     password: passwordSchema,
     confirmPassword: z.string(),
@@ -158,7 +181,9 @@ export type RegisterValues = z.infer<typeof registerSchema>
  *  vem no corpo, omitir o campo aqui PRESERVA a foto já gravada. */
 export const profileSchema = z.object({
   name: nameSchema,
-  surname: nameSchema,
+  // Igual ao cadastro: quem criou a conta sem sobrenome precisa conseguir
+  // salvar o perfil sem inventar um.
+  surname: optionalNameSchema,
   bio: z.string().transform(multiLine).pipe(z.string().max(400, 'Máximo de 400 caracteres.')),
   state: shortText(60),
   country: shortText(60),
