@@ -4,6 +4,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { AuthWall } from './AuthWall'
 import { AuthWallBackdrop } from './AuthWallBackdrop'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { APP_HOME } from '@/lib/nav'
 
 /** Guard base. Enquanto a sessão não foi lida do storage, não decide nada —
  *  redirecionar aqui jogaria o usuário para o login a cada F5. */
@@ -161,6 +162,34 @@ export function RequireAdmin({ children }: { children?: React.ReactNode }) {
       {children}
     </GuardShell>
   )
+}
+
+/** A raiz: landing para visitante, catálogo para quem já tem conta.
+ *
+ *  A LandingPage existe para explicar o produto a quem ainda não o conhece.
+ *  Quem já se cadastrou não precisa dela toda vez que abre o site pelo
+ *  favorito — para essa pessoa o "início" é o catálogo, como em qualquer app
+ *  de vídeo. A landing continua acessível a ela por link direto; o que muda é
+ *  só o destino padrão da raiz.
+ *
+ *  Espera `isReady` antes de decidir: durante a checagem de sessão do boot,
+ *  `isAuthenticated` ainda é false, e redirecionar aí mostraria a landing por
+ *  um instante para quem está logado — piscada visível a cada F5. */
+export function LandingOrHome({ landing }: { landing: React.ReactNode }) {
+  const { isAuthenticated, isReady } = useAuth()
+
+  if (!isReady) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-surface-0" role="status" aria-live="polite">
+        <Spinner size={28} />
+        <span className="sr-only">Verificando sua sessão…</span>
+      </div>
+    )
+  }
+
+  if (isAuthenticated) return <Navigate to={APP_HOME} replace />
+
+  return <>{landing}</>
 }
 
 /** Inverso: quem já está logado não deve ver /login ou /register. */

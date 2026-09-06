@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
+  LandingOrHome,
   RedirectIfAuthenticated,
   RequireAdmin,
   RequireAuth,
@@ -59,7 +60,8 @@ function RouteFallback() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      {/* Raiz: landing para visitante, catálogo para quem já tem sessão. */}
+      <Route path="/" element={<LandingOrHome landing={<LandingPage />} />} />
       <Route
         path="/login"
         element={
