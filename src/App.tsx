@@ -5,6 +5,7 @@ import {
   RedirectIfAuthenticated,
   RequireAdmin,
   RequireAuth,
+  RequireAuthPlayer,
   RequireCreator,
 } from '@/components/auth/RouteGuards'
 import { Spinner } from '@/components/ui/Spinner'
@@ -43,13 +44,17 @@ function RouteFallback() {
   )
 }
 
-/** Toda rota privada passa por um guard.
+/** Só a home é aberta; toda outra rota passa por um guard.
  *
- *  Acessar a URL direto (colando no navegador) cai na mesma checagem: sem
- *  sessão vai para /login guardando o destino; com sessão mas sem o papel
- *  necessário vai para /403 com explicação. Os guards espelham as regras do
- *  SecurityConfig do backend — a autorização real continua sendo do servidor.
- */
+ *  Sem sessão, o guard não redireciona: mostra o AuthWall — a tela pedida
+ *  desfocada com um aviso de login por cima (ver RouteGuards). O visitante
+ *  chega nessas rotas clicando, e trocar a tela dele por um formulário apaga o
+ *  contexto. Com sessão mas sem o papel necessário, continua indo para /403,
+ *  que explica qual papel falta.
+ *
+ *  Os guards espelham as regras do SecurityConfig do backend — a autorização
+ *  real continua sendo do servidor. O que muda aqui é só o que se DESENHA:
+ *  nenhum dado privado chega ao navegador de quem não tem sessão. */
 export default function App() {
   return (
     <Routes>
@@ -71,10 +76,20 @@ export default function App() {
       />
 
       <Route element={<AppLayout withSearch />}>
-        {/* Home exige sessão: GET /video hoje falha sem token. */}
-        <Route element={<RequireAuth />}>
-          <Route path="/" element={<HomePage />} />
+        {/* Home ABERTA: GET /video é público, então quem chega pela primeira
+            vez cai no catálogo em vez de num formulário de login. É a vitrine
+            do produto — pedir credencial antes de mostrar qualquer coisa é o
+            que fazia o site parecer fechado para quem só queria olhar. */}
+        <Route path="/" element={<HomePage />} />
+
+        {/* O player continua exigindo sessão porque GET /video/{id} exige: é
+            ele que devolve a URL assinada de reprodução. Ver as capas é
+            público; dar play não. */}
+        <Route element={<RequireAuthPlayer />}>
           <Route path="/videos/:id" element={<VideoPage />} />
+        </Route>
+
+        <Route element={<RequireAuth />}>
           <Route path="/profile" element={<ProfilePage />} />
           {/* Perfil público de outra pessoa. RequireAuth basta: a rota do
               backend (GET /auth/user/{id}) libera para CREATORS e VIEWERS, que

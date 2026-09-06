@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Search, Moon, Sun, LogOut, User, ShieldCheck, X } from 'lucide-react'
+import { Search, Moon, Sun, LogOut, LogIn, User, ShieldCheck, X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import { Avatar } from '@/components/ui/Avatar'
@@ -184,10 +184,23 @@ export function Header({
                 )}
               </div>
             ) : (
+              // Único convite persistente para o visitante, agora que a home é
+              // aberta: ele pode navegar o catálogo inteiro sem conta, e este
+              // botão é o que diz que existe um "dentro".
+              //
+              // Pílula contornada em vez de bloco sólido de marca: no header o
+              // sólido competia com as capas dos vídeos, que são o conteúdo da
+              // tela. A borda em brand marca o botão como ação primária sem
+              // gritar, e o preenchimento entra no hover.
+              //
+              // hover:bg-brand-600 (e não 400) porque o rótulo vira branco: no
+              // degrau 400 o contraste cai abaixo de 4.5:1 — mesma razão
+              // documentada no Button.
               <Link
                 to="/login"
-                className="ml-1 rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-400 focus-ring"
+                className="ml-1 inline-flex h-10 items-center gap-1.5 rounded-full border border-brand-500 px-4 text-sm font-semibold text-brand-link transition-colors hover:border-brand-600 hover:bg-brand-600 hover:text-white focus-ring"
               >
+                <LogIn size={16} aria-hidden="true" />
                 Entrar
               </Link>
             )}
