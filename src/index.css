@@ -234,6 +234,22 @@ body {
   }
 }
 
+@keyframes landing-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.landing-marquee {
+  animation: landing-marquee 28s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-marquee {
+    animation: none;
+  }
+}
+
 @keyframes shimmer {
   100% {
     transform: translateX(100%);

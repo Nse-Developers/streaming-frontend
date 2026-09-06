@@ -16,6 +16,7 @@ import { ProfilePage } from '@/pages/ProfilePage'
 import { UserProfilePage } from '@/pages/UserProfilePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { ForbiddenPage } from '@/pages/ForbiddenPage'
+import { LandingPage } from '@/pages/LandingPage'
 
 /** Telas carregadas SÓ quando a rota é aberta.
  *
@@ -53,6 +54,7 @@ function RouteFallback() {
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route
         path="/login"
         element={
@@ -73,7 +75,7 @@ export default function App() {
       <Route element={<AppLayout withSearch />}>
         {/* Home exige sessão: GET /video hoje falha sem token. */}
         <Route element={<RequireAuth />}>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/home" element={<HomePage />} />
           <Route path="/videos/:id" element={<VideoPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           {/* Perfil público de outra pessoa. RequireAuth basta: a rota do
