@@ -19,6 +19,7 @@ import { toErrorMessage } from '@/api/client'
 import { safeExternalUrl } from '@/lib/validation'
 import { formatViews, formatRelativeDate } from '@/lib/format'
 import { STATUS_LABEL, canView } from '@/lib/video'
+import { APP_HOME } from '@/lib/nav'
 
 export function VideoPage() {
   const { id } = useParams<{ id: string }>()
@@ -53,7 +54,7 @@ export function VideoPage() {
           title="Endereço inválido"
           description="O identificador do vídeo não é um número válido."
           action={
-            <Link to="/">
+            <Link to={APP_HOME}>
               <Button variant="secondary">Voltar ao início</Button>
             </Link>
           }
@@ -106,7 +107,7 @@ export function VideoPage() {
             isError ? toErrorMessage(error) : 'Este vídeo não existe ou não está mais disponível.'
           }
           action={
-            <Link to="/">
+            <Link to={APP_HOME}>
               <Button variant="secondary">Voltar ao início</Button>
             </Link>
           }

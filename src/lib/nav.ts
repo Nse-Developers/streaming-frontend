@@ -45,3 +45,14 @@ export const NAV_ITEMS: NavItem[] = [
     show: (auth) => auth.isAdmin,
   },
 ]
+
+/** Para onde "voltar ao início" leva DENTRO do app.
+ *
+ *  Não é "/": a raiz é a LandingPage, que apresenta o produto a quem ainda não
+ *  tem conta. Quem já está usando o app e clica em "voltar ao início" quer o
+ *  catálogo, não a página de marketing com "Criar conta grátis".
+ *
+ *  Constante em vez da string solta porque nove telas dependiam dela — e no dia
+ *  em que a landing entrou, todas as nove passaram a apontar para o lugar
+ *  errado de uma vez. Aqui, mover o catálogo é trocar esta linha. */
+export const APP_HOME = '/home'

@@ -17,6 +17,7 @@ import { ProfilePage } from '@/pages/ProfilePage'
 import { UserProfilePage } from '@/pages/UserProfilePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { ForbiddenPage } from '@/pages/ForbiddenPage'
+import { LandingPage } from '@/pages/LandingPage'
 
 /** Telas carregadas SÓ quando a rota é aberta.
  *
@@ -58,6 +59,7 @@ function RouteFallback() {
 export default function App() {
   return (
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route
         path="/login"
         element={
@@ -76,11 +78,13 @@ export default function App() {
       />
 
       <Route element={<AppLayout withSearch />}>
-        {/* Home ABERTA: GET /video é público, então quem chega pela primeira
-            vez cai no catálogo em vez de num formulário de login. É a vitrine
-            do produto — pedir credencial antes de mostrar qualquer coisa é o
-            que fazia o site parecer fechado para quem só queria olhar. */}
-        <Route path="/" element={<HomePage />} />
+        {/* Catálogo ABERTO: `GET /video` é público, então o visitante que vem
+            da landing vê os vídeos de verdade sem precisar de conta. A landing
+            (rota "/") apresenta o produto; aqui ele começa a usá-lo.
+
+            Mora em /home, e não em "/", porque a landing ocupa a raiz. Quem
+            chega logado é mandado para cá — ver RedirectIfAuthenticated. */}
+        <Route path="/home" element={<HomePage />} />
 
         {/* O player continua exigindo sessão porque GET /video/{id} exige: é
             ele que devolve a URL assinada de reprodução. Ver as capas é

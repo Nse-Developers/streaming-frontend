@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { LockKeyhole, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { APP_HOME } from '@/lib/nav'
 
 /** Parede de login para visitante que tenta abrir uma área privada.
  *
@@ -100,7 +101,7 @@ export function AuthWall({
             <Link to="/login" state={{ from }} className="w-full">
               <Button className="w-full">Entrar</Button>
             </Link>
-            <Link to="/" className="w-full">
+            <Link to={APP_HOME} className="w-full">
               <Button variant="ghost" className="w-full">
                 <ArrowLeft size={16} />
                 Voltar aos vídeos

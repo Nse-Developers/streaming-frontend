@@ -177,8 +177,13 @@ export function RedirectIfAuthenticated({ children }: { children: React.ReactNod
   }
 
   if (isAuthenticated) {
+    // Destino padrão é /home (o catálogo), NÃO "/" — a raiz é a landing, que
+    // apresenta o produto a quem ainda não tem conta. Mandar para lá alguém
+    // que acabou de entrar devolveria a tela de "Criar conta grátis" para um
+    // usuário já cadastrado, sem caminho óbvio para o app.
     const from = (location.state as { from?: string } | null)?.from
-    return <Navigate to={from && from !== '/login' ? from : '/'} replace />
+    const isUsableDestination = from && from !== '/login' && from !== '/register' && from !== '/'
+    return <Navigate to={isUsableDestination ? from : '/home'} replace />
   }
 
   return <>{children}</>

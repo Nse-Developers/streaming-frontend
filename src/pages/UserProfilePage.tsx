@@ -26,6 +26,7 @@ import { safeExternalUrl } from '@/lib/validation'
 import { formatLongDateBR } from '@/lib/format'
 import type { PublicUserResponse } from '@/api/types'
 import { publicVideos, type UiVideo } from '@/lib/video'
+import { APP_HOME } from '@/lib/nav'
 
 const ACCOUNT_LABEL = { CREATORS: 'Criador', VIEWERS: 'Espectador' } as const
 
@@ -54,7 +55,7 @@ export function UserProfilePage() {
           title="Endereço inválido"
           description="O identificador do perfil não é um número válido."
           action={
-            <Link to="/">
+            <Link to={APP_HOME}>
               <Button variant="secondary">Voltar ao início</Button>
             </Link>
           }
@@ -169,7 +170,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
 function BackLink() {
   return (
     <Link
-      to="/"
+      to={APP_HOME}
       // Sem padding nenhum, o alvo era a altura da própria linha de texto
       // (~20px) — e é o primeiro controle do topo da página. O `-ml-2`
       // compensa o padding novo para o texto continuar alinhado à margem.

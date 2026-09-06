@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import { Avatar } from '@/components/ui/Avatar'
 import { Logo } from './Logo'
+import { APP_HOME } from '@/lib/nav'
 
 const ACCOUNT_LABEL = { CREATORS: 'Criador', VIEWERS: 'Espectador' } as const
 
@@ -71,7 +72,7 @@ export function Header({
         <>
           {/* Sempre visível: o rail lateral só tem ícones, então a marca vive
               aqui em todos os tamanhos de tela. */}
-          <Link to="/" className="shrink-0 rounded-md focus-ring" aria-label="Byou — início">
+          <Link to={APP_HOME} className="shrink-0 rounded-md focus-ring" aria-label="Byou — início">
             <Logo />
           </Link>
 
