@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Check, ChevronDown, Eye, UploadCloud } from 'lucide-react'
+import { Check, ChevronDown, Circle, Eye, UploadCloud } from 'lucide-react'
 import { AuthShell } from '@/components/auth/AuthShell'
+import { PolicyDialog } from '@/components/auth/PolicyDialog'
 import { Input } from '@/components/ui/Input'
+import { Checkbox } from '@/components/ui/Checkbox'
 import { PasswordInput } from '@/components/ui/PasswordInput'
 import { Textarea } from '@/components/ui/Textarea'
 import { Button } from '@/components/ui/Button'
@@ -12,7 +14,8 @@ import { Alert } from '@/components/ui/Alert'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { toErrorMessage } from '@/api/client'
-import { registerSchema, type RegisterValues } from '@/lib/validation'
+import { MIN_AGE_YEARS, registerSchema, type RegisterValues } from '@/lib/validation'
+import { getPolicy, type Policy } from '@/lib/policies'
 import { cn } from '@/lib/cn'
 
 const ACCOUNT_TYPES = [
@@ -30,6 +33,18 @@ const ACCOUNT_TYPES = [
   },
 ]
 
+/** Hoje em `YYYY-MM-DD` para o `max` do seletor de data.
+ *
+ *  Montado a partir das partes LOCAIS da data (`getFullYear`/`getMonth`/
+ *  `getDate`), e não de `toISOString()`, que converte para UTC: no Brasil isso
+ *  adiantaria o limite em um dia durante boa parte do dia. */
+const TODAY_ISO = (() => {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+})()
+
 /** Requisitos da senha mostrados ao vivo — evita descobrir a regra só no erro. */
 const PASSWORD_RULES = [
   { test: (v: string) => v.length >= 8, label: '8+ caracteres' },
@@ -45,6 +60,8 @@ export function RegisterPage() {
   const { showToast } = useToast()
   const [formError, setFormError] = useState<string | null>(null)
   const [showOptional, setShowOptional] = useState(false)
+  /** Qual documento está aberto para leitura, ou null. */
+  const [openPolicy, setOpenPolicy] = useState<Policy | null>(null)
 
   const from = (location.state as { from?: string } | null)?.from
 
@@ -64,6 +81,13 @@ export function RegisterPage() {
       email: '',
       password: '',
       confirmPassword: '',
+      dateOfBirth: '',
+      // Começa desmarcado SEMPRE: caixa pré-marcada não é aceite, e é esta
+      // declaração que o servidor grava como consentimento do titular.
+      // O schema exige `true`, então o tipo do formulário não admite `false`
+      // aqui — `undefined` é o "ainda não respondeu" que o resolver reprova
+      // com a mesma mensagem, sem precisar de cast.
+      acceptedPolicies: undefined,
       userTypeAccount: 'VIEWERS',
       bio: '',
       state: '',
@@ -76,6 +100,12 @@ export function RegisterPage() {
 
   const accountType = watch('userTypeAccount')
   const password = watch('password') ?? ''
+
+  /** Algum campo do bloco opcional foi reprovado? Só os validáveis entram: bio,
+   *  estado e país não têm regra, os três links têm formato de URL. */
+  const hasOptionalError = Boolean(
+    errors.bio || errors.state || errors.country || errors.linkInstagram || errors.linkYoutube || errors.linkWebsite,
+  )
 
   const onSubmit = async (values: RegisterValues) => {
     setFormError(null)
@@ -110,35 +140,109 @@ export function RegisterPage() {
       }
     >
       {formError && (
-        <Alert tone="error" className="mb-5">
+        <Alert tone="error" focusOnMount className="mb-5">
           {formError}
         </Alert>
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
-        {/* Tipo de conta primeiro: define o que o usuário poderá fazer. */}
-        <fieldset>
-          <legend className="mb-2 text-sm font-medium text-surface-700">Como você vai usar?</legend>
-          <div className="grid gap-2.5 sm:grid-cols-2">
-            {ACCOUNT_TYPES.map(({ value, icon: Icon, label, hint }) => {
+        {/* Tipo de conta primeiro: define o que o usuário poderá fazer.
+
+            O bloco INTEIRO ganha moldura, fundo próprio e a cor de accent
+            porque muita gente passava batido e criava conta de espectador sem
+            querer. Antes ele era um `radiogroup` solto usando `brand-500`, a
+            mesma cor de todo o resto do formulário (campos, links, o botão de
+            enviar): lido de cima para baixo, parecia mais um campo, não uma
+            escolha que muda o que a conta pode fazer.
+            A menta é o token reservado do tema justamente para "selo de
+            estado" — complementar ao azul e nunca usada em ação, então
+            destacar com ela não cria uma segunda cor de "clicável".
+
+            Um <div> e não <fieldset>/<legend>: o <legend> nativo se posiciona
+            SOBRE a borda de cima e encolhe ao conteúdo, o que quebrava o
+            enquadramento no celular (o selo caía para uma segunda linha e o
+            título saía por cima da moldura), e devolvê-lo ao fluxo com
+            `float`/`w-full` conflitava com o grid dos cartões. O papel
+            semântico fica com `role="radiogroup"` + `aria-labelledby`, que é o
+            que o leitor de tela usa para nomear o grupo. */}
+        <div className="rounded-xl border border-accent-ink/35 bg-accent-ink/[0.06] p-3.5 sm:p-4">
+          <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-surface-800">
+            {/* O id fica no <span> da pergunta, e nao no <p> que envolve tudo:
+                apontado para o <p>, o nome do grupo saia como "Como voce vai
+                usar?Escolha uma" — o texto do selo colado sem espaco. */}
+            <span id="rotulo-tipo-conta">Como você vai usar?</span>
+            {/* "Escolha uma" em vez de "obrigatório": o grupo já vem com uma
+                opção marcada, então o que falta não é preencher, é CONFERIR se
+                a marcada é a certa.
+                Borda em vez de fundo tingido: medido, a menta sobre o proprio
+                tint dava 3.99:1 no tema claro (abaixo do minimo 4.5:1 da WCAG
+                AA) em TODOS os alfas testados, porque o token claro (#0f7a5c) e
+                proximo demais da sua propria mistura. Sem fundo, sobe para
+                4.89:1 no claro e 9.35:1 no escuro. */}
+            <span className="rounded-full border border-accent-ink/50 px-2 py-0.5 text-[11px] font-medium leading-tight text-accent-ink">
+              Escolha uma
+            </span>
+          </p>
+          {/* Escolha ÚNICA, então `radiogroup` e não dois botões de alternância:
+              com `aria-pressed` o leitor de tela anunciava dois toggles
+              independentes ("pressionado"/"não pressionado"), sem dizer que
+              marcar um desmarca o outro nem quantas opções existem.
+              Mesmo padrão já usado nas estrelas do RatingSection: roving
+              tabindex (o grupo é UMA parada de Tab) e setas para navegar. */}
+          {/* `aria-labelledby` aponta para o <p> acima: sem <fieldset>/<legend>,
+              e ele que nomeia o grupo para o leitor de tela. Um `aria-label`
+              junto faria o mesmo texto ser anunciado duas vezes. */}
+          <div
+            role="radiogroup"
+            aria-labelledby="rotulo-tipo-conta"
+            className="grid gap-2.5 sm:grid-cols-2"
+          >
+            {ACCOUNT_TYPES.map(({ value, icon: Icon, label, hint }, index) => {
               const selected = accountType === value
               return (
                 <button
                   key={value}
                   type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  tabIndex={selected ? 0 : -1}
+                  id={`conta-${value}`}
+                  onKeyDown={(event) => {
+                    const delta =
+                      event.key === 'ArrowRight' || event.key === 'ArrowDown'
+                        ? 1
+                        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+                          ? -1
+                          : 0
+                    if (delta === 0) return
+                    event.preventDefault()
+                    const next = (index + delta + ACCOUNT_TYPES.length) % ACCOUNT_TYPES.length
+                    setValue('userTypeAccount', ACCOUNT_TYPES[next].value, { shouldValidate: true })
+                    document.getElementById(`conta-${ACCOUNT_TYPES[next].value}`)?.focus()
+                  }}
                   onClick={() => setValue('userTypeAccount', value, { shouldValidate: true })}
-                  aria-pressed={selected}
                   className={cn(
-                    'flex items-start gap-3 rounded-xl border p-3.5 text-left transition-colors duration-150 focus-ring',
+                    // `bg-surface-100`: os cartões ficam sobre o fundo tingido
+                    // do bloco, então precisam de um fundo opaco próprio para
+                    // não virarem duas manchas de menta sobre menta.
+                    'flex items-start gap-3 rounded-xl border bg-surface-100 p-3.5 text-left transition-colors duration-150 focus-ring',
                     selected
-                      ? 'border-brand-500 bg-brand-500/8'
+                      // `ring` além da borda: a borda de 1px sozinha era sutil
+                      // demais para dizer QUAL das duas está marcada, e era esse
+                      // o relato — gente que criava conta de espectador sem ver
+                      // que havia escolha.
+                      ? 'border-accent-ink bg-accent-ink/10 ring-1 ring-accent-ink'
                       : 'border-surface-300 hover:border-surface-400',
                   )}
                 >
                   <span
                     className={cn(
                       'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                      selected ? 'bg-brand-500 text-white' : 'bg-surface-200 text-surface-600',
+                      // Texto escuro sobre a menta, não branco: o token do tema
+                      // escuro (#4de3b4) é um verde CLARO, e branco em cima dava
+                      // 1.9:1. `surface-0` é o fundo da página nos dois temas,
+                      // então acompanha a inversão junto com a menta.
+                      selected ? 'bg-accent-ink text-surface-0' : 'bg-surface-200 text-surface-600',
                     )}
                   >
                     <Icon size={15} />
@@ -147,12 +251,16 @@ export function RegisterPage() {
                     <span
                       className={cn(
                         'block text-sm font-semibold',
-                        selected ? 'text-brand-link' : 'text-surface-900',
+                        selected ? 'text-accent-ink' : 'text-surface-900',
                       )}
                     >
                       {label}
                     </span>
-                    <span className="mt-0.5 block text-xs leading-snug text-surface-600">
+                    {/* `surface-700` e nao `surface-600`: sobre o fundo do
+                        cartao SELECIONADO (menta a 10%) o 600 caia para 3.74:1
+                        no tema escuro. O 700 da 5.60:1 no escuro e 8.11:1 no
+                        claro — passa nos dois. */}
+                    <span className="mt-0.5 block text-xs leading-snug text-surface-700">
                       {hint}
                     </span>
                   </span>
@@ -160,8 +268,11 @@ export function RegisterPage() {
               )
             })}
           </div>
-        </fieldset>
+        </div>
 
+        {/* Sobrenome é opcional desde que o backend parou de exigi-lo. Fica no
+            mesmo par de colunas do nome: separá-lo em outra linha para sinalizar
+            "menos importante" só alongaria o formulário. */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Input
             label="Nome"
@@ -172,6 +283,7 @@ export function RegisterPage() {
           />
           <Input
             label="Sobrenome"
+            optional
             autoComplete="family-name"
             placeholder="Silva"
             error={errors.surname?.message}
@@ -187,6 +299,21 @@ export function RegisterPage() {
           placeholder="voce@email.com"
           error={errors.email?.message}
           {...register('email')}
+        />
+
+        {/* Data de nascimento: campo obrigatório desde que o cadastro passou a
+            exigir idade mínima. `type="date"` entrega o formato YYYY-MM-DD que
+            a API espera, e o seletor nativo do sistema junto.
+            `max` impede escolher uma data futura pelo próprio seletor — a
+            validação ainda cobre quem digita à mão. */}
+        <Input
+          label="Data de nascimento"
+          type="date"
+          autoComplete="bday"
+          max={TODAY_ISO}
+          hint={`É preciso ter ${MIN_AGE_YEARS} anos ou mais.`}
+          error={errors.dateOfBirth?.message}
+          {...register('dateOfBirth')}
         />
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -206,8 +333,13 @@ export function RegisterPage() {
           />
         </div>
 
-        {password.length > 0 && (
-          <ul className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {/* Sempre visível, não só depois da primeira tecla: as regras eram
+            reveladas quando o usuário JÁ estava digitando, então ele escolhia
+            uma senha e só então descobria as exigências.
+            `aria-live` porque os itens viram "atendido" conforme se digita —
+            sem isso, quem usa leitor de tela precisaria voltar até a lista para
+            saber se progrediu. */}
+        <ul aria-live="polite" className="flex flex-wrap gap-x-4 gap-y-1.5">
             {PASSWORD_RULES.map(({ test, label }) => {
               const ok = test(password)
               return (
@@ -215,16 +347,24 @@ export function RegisterPage() {
                   key={label}
                   className={cn(
                     'flex items-center gap-1.5 text-xs',
-                    ok ? 'text-success-500' : 'text-surface-600',
+                    ok ? 'text-success-ink' : 'text-surface-600',
                   )}
                 >
-                  <Check size={13} className={ok ? 'opacity-100' : 'opacity-30'} />
+                  {/* Ícones DIFERENTES, não o mesmo com opacidade menor: antes
+                      o único sinal de "atendido" era a cor e a transparência do
+                      Check — invisível para quem não distingue as duas cores, e
+                      inexistente para leitor de tela. */}
+                  {ok ? (
+                    <Check size={13} aria-hidden="true" />
+                  ) : (
+                    <Circle size={13} aria-hidden="true" />
+                  )}
                   {label}
+                  <span className="sr-only">{ok ? '(atendido)' : '(pendente)'}</span>
                 </li>
               )
             })}
-          </ul>
-        )}
+        </ul>
 
         {/* Campos opcionais escondidos: mantêm o formulário curto no celular. */}
         <div className="rounded-xl border border-surface-200">
@@ -251,7 +391,12 @@ export function RegisterPage() {
             />
           </button>
 
-          {showOptional && (
+          {/* Abre sozinho quando a validação reprova algo aqui dentro.
+              O painel é DESMONTADO quando fechado, então um link inválido em
+              "Instagram" bloqueava o envio com a mensagem de erro dentro de um
+              bloco invisível: clicar em "Criar conta" simplesmente não fazia
+              nada, sem dizer por quê. */}
+          {(showOptional || hasOptionalError) && (
             <div className="space-y-4 border-t border-surface-200 p-4">
               <Textarea
                 label="Bio"
@@ -296,10 +441,45 @@ export function RegisterPage() {
           )}
         </div>
 
+        {/* Aceite. Fica imediatamente antes do botão, o último passo antes de
+            criar a conta, e é o que o servidor grava junto da versão vigente
+            dos documentos. */}
+        <Checkbox
+          label={
+            <>
+              Li e aceito os{' '}
+              <button
+                type="button"
+                onClick={() => setOpenPolicy(getPolicy('terms'))}
+                className="font-semibold text-brand-link underline underline-offset-2 hover:no-underline focus-ring"
+              >
+                termos de uso
+              </button>{' '}
+              e a{' '}
+              <button
+                type="button"
+                onClick={() => setOpenPolicy(getPolicy('privacy'))}
+                className="font-semibold text-brand-link underline underline-offset-2 hover:no-underline focus-ring"
+              >
+                política de privacidade
+              </button>
+              .
+            </>
+          }
+          error={errors.acceptedPolicies?.message}
+          {...register('acceptedPolicies')}
+        />
+
+        {/* O botão NÃO fica desabilitado quando falta o aceite: um botão inerte
+            não diz o que está faltando, e o motivo some para quem usa leitor de
+            tela. Enviar com a caixa vazia reprova na validação e a mensagem
+            aparece presa ao próprio campo. */}
         <Button type="submit" size="lg" isLoading={isSubmitting} className="w-full">
           Criar conta
         </Button>
       </form>
+
+      <PolicyDialog policy={openPolicy} onClose={() => setOpenPolicy(null)} />
     </AuthShell>
   )
 }

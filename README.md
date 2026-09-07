@@ -10,7 +10,8 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-O backend precisa estar no ar (com MySQL, Redis e MinIO). Em desenvolvimento as
+O backend precisa estar no ar (com MySQL, Redis e o storage de objetos — hoje
+Cloudflare R2). Em desenvolvimento as
 chamadas passam pelo **proxy do Vite**: o front pede `/api/...` na própria
 origem e o Vite repassa para a API, então **não há CORS no caminho** — trocar a
 porta do dev server não quebra nada.
@@ -23,8 +24,9 @@ o `Tomcat started on port ...` no log do Spring se estiver em dúvida.
 > Vite falha na hora dizendo isso, em vez de subir em 5174 — a porta 5173 é a
 > única liberada no CORS do backend, e o build de produção depende disso.
 
-> **Bucket do MinIO** (`byou-stream-bucket`) precisa existir, senão o upload
-> falha com 500. Ver a seção de infraestrutura em `PENDENCIAS.md`.
+> **O bucket do storage** precisa existir, senão o upload falha com 500. O
+> backend hoje assina URLs do Cloudflare R2 (`*.r2.cloudflarestorage.com`), não
+> mais do MinIO local.
 
 ```bash
 npm run build        # tsc -b && vite build
@@ -64,8 +66,9 @@ resultariam em 403, e para falhar de forma explicada em vez de silenciosa.
   navegador.
 - **CSRF**: o axios já ecoa o cookie `XSRF-TOKEN` no header `X-XSRF-TOKEN`
   (`xsrfCookieName`/`xsrfHeaderName`). Necessário porque cookie automático é
-  vulnerável a CSRF, diferente de Bearer em header. **Atenção:** hoje o backend
-  não emite esse cookie, o que bloqueia todas as escritas — ver `PENDENCIAS.md`.
+  vulnerável a CSRF, diferente de Bearer em header. **Funcionando** (verificado
+  em 2026-08-27): o backend emite `XSRF-TOKEN` no login e recusa com 403 a
+  escrita sem o header `X-XSRF-TOKEN`.
 - **Guards de rota** (`components/auth/RouteGuards.tsx`) espelham o
   `SecurityConfig`: sem sessão vai para `/login` guardando o destino; com sessão
   mas sem o papel necessário vai para `/403` com a explicação do motivo. Vale
@@ -73,25 +76,100 @@ resultariam em 403, e para falhar de forma explicada em vez de silenciosa.
 - **Validação de formulário** com zod (`lib/validation.ts`): além dos limites de
   tamanho, remove caracteres de controle, aceita apenas URLs `http(s)` (barrando
   `javascript:`/`data:`) e restringe o nome de categoria, que vai na URL.
+- **`safeExternalUrl` exige URL absoluta**: usada antes de qualquer valor da API
+  ir para `src`/`href`. Não resolve mais contra `window.location.origin`, porque
+  com base um caminho relativo (`/x`) virava URL da própria origem e uma URL
+  protocol-relative (`//evil.com/x`) era promovida a `https://evil.com/x` sem
+  aviso. Os quatro pontos de uso recebem sempre URL absoluta.
+- **Visibilidade centralizada** em `isPubliclyVisible`/`publicVideos`
+  (`lib/video.ts`): listagens públicas mostram só `PUBLISHED`. É allowlist — um
+  status novo no backend fica invisível até alguém decidir o contrário, em vez
+  de aparecer sozinho. Antes a regra estava repetida em cada tela, e uma tela
+  nova podia esquecê-la. **O backend continua sendo a autoridade**: se ele
+  enviar rascunho de terceiro no feed, o dado chega ao navegador (oculto na UI,
+  mas presente no JSON) — o filtro definitivo é lá.
 - **Upload**: tipo e tamanho conferidos antes de enviar (o backend revalida o
   conteúdo com Apache Tika).
 - **Sem `dangerouslySetInnerHTML`** em nenhum ponto: todo texto vindo da API é
   renderizado como conteúdo, então o React escapa.
 - **Mensagens de erro** não vazam informação: e-mail inexistente e senha errada
-  produzem a mesma resposta na tela, evitando enumeração de usuários.
+  produzem a mesma resposta na tela, evitando enumeração de usuários. Em **5xx**
+  a mensagem do backend é descartada em favor de um texto fixo: um
+  `ExceptionResponse` de erro não tratado carrega a exceção do Spring, que pode
+  trazer nome de tabela, fragmento de SQL ou host do MinIO. Em 4xx a mensagem é
+  exibida, porque ali ela é de negócio ("categoria já existe").
+- **Cache limpo na troca de sessão**: `login()` e `logout()` chamam
+  `queryClient.clear()`. Sem isso o cache do React Query sobrevivia ao logout
+  (é navegação SPA, sem reload, e o `gcTime` padrão é 5 min) e as chaves sem
+  identidade de usuário — `['videos']`, `['users']`, `['comments', id]` —
+  serviriam ao próximo a entrar no mesmo navegador o que o anterior carregou,
+  incluindo a lista de e-mails que um admin abriu em `/admin`.
+- **`VITE_API_URL` obrigatória no build de produção**: `vite.config.ts` falha o
+  build se ela faltar ou não for `https`. Antes havia um fallback para
+  `http://localhost:8080` que era embutido no bundle; combinado com
+  `withCredentials: true`, um deploy sem a variável fazia o navegador do
+  visitante enviar e-mail e senha do login para qualquer processo escutando
+  naquela porta na máquina **dele**.
+
+## Deploy: headers de segurança
+
+O `dist/` é estático, então estes headers dependem do servidor que o publica —
+não há como defini-los no bundle. Exemplo para nginx (troque os placeholders
+pelos hosts reais da API e do MinIO):
+
+```nginx
+add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://MINIO_HOST; media-src 'self' https://MINIO_HOST; connect-src 'self' https://API_HOST; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; upgrade-insecure-requests" always;
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+```
+
+Compatibilidade verificada para este app: `style-src` **sem** `'unsafe-inline'`
+funciona (o Tailwind sai como CSS externo, e os `style={{...}}` de
+`ProgressBar`/`VideoPlayer` o React aplica via propriedade DOM, não como
+atributo); `script-src 'self'` basta (o `dist/index.html` não tem script
+inline); `frame-ancestors 'none'` dispensa `X-Frame-Options`; `form-action
+'none'` é seguro porque todo envio passa por axios, não por `<form action>`. As
+fontes vêm do Google Fonts via `<link>` no `index.html`, daí as duas exceções.
 
 ## Estado da integração
 
-Todas as rotas disponíveis estão ligadas, e **toda leitura funciona**: feed,
-página de vídeo, comentários, categorias, perfil, listagem de usuários.
+Reverificado ao vivo em **2026-08-27** contra a API 2.0. Todas as rotas
+disponíveis estão ligadas, e **leitura e escrita funcionam**: feed, página de
+vídeo, comentários, curtidas, categorias, perfil, avaliações, upload nos três
+passos, e troca de status.
 
-**Nenhuma escrita funciona hoje** — comentar, curtir, enviar vídeo, editar
-perfil e até sair respondem 403. A causa é de backend: a proteção CSRF está
-ativa, mas o servidor nunca emite o cookie `XSRF-TOKEN` que a destravaria.
+O que estava documentado aqui como quebrado **foi corrigido no backend** e não
+vale mais: o cookie `XSRF-TOKEN` é emitido no login (escritas funcionam),
+`videoUrl` vem na resposta como URL assinada (reprodução funciona) e
+`PATCH /video/update/status` responde 200.
 
-Também fora do ar: reprodução de vídeo (falta `videoUrl` na resposta) e
-publicar/tornar privado (`PATCH /video/update/status` responde 500 mesmo com id
-válido).
+Pendências conhecidas, todas de backend:
 
-**O diagnóstico completo de cada interação — o que funciona, o que não, por que,
-e como corrigir — está em [PENDENCIAS.md](PENDENCIAS.md).**
+- **`PUT`/`DELETE /auth/users/{email}` são self-only** — respondem 403 para o
+  ADMIN agindo sobre outra conta. O botão "remover usuário" do painel admin
+  sempre falha por causa disso.
+- **`DELETE /comments/{id}` responde 404** mesmo para um comentário existente do
+  próprio usuário. Por isso não há "excluir comentário" na UI — ver
+  `commentApi.removeComment`.
+- **`GET /video` e `GET /video/{id}` entregam DRAFT/PRIVATE de terceiros ao
+  ADMIN**, com URL de reprodução válida. Para usuário comum já respondem
+  correto (404). O front recusa exibir — ver `canView` em `lib/video.ts`.
+- **`GET /feedback/getFeedbacks` não tem filtro nem paginação** e devolve o
+  vídeo e o usuário aninhados em cada item: ~1,6 KB por avaliação, dos quais a
+  UI usa 4 campos. Ver a nota de cache em `hooks/useFeedback.ts`.
+
+### Antes de publicar em produção
+
+Dois bloqueios que **não são do frontend** e derrubam o app inteiro num domínio
+real (verificados em 2026-08-27):
+
+1. **CORS libera apenas `http://localhost:5173`.** O preflight de qualquer outra
+   origem responde 403 — nenhuma request funcionaria.
+2. **O cookie `byou_session` é `SameSite=Lax` e sem `Secure`.** Com front e API
+   em domínios diferentes o navegador não o envia, e o usuário fica deslogado
+   logo após o login. Em produção precisa ser `Secure; SameSite=None` (ou os
+   dois sob o mesmo domínio).
+
+Do lado do deploy, o servidor que servir o `dist/` precisa de **fallback de SPA**
+(toda rota desconhecida -> `index.html`), senão abrir `/videos/1` direto dá 404.

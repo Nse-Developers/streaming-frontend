@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -10,21 +10,32 @@ import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { FileDropzone } from '@/components/ui/FileDropzone'
 import { ProgressBar } from '@/components/ui/ProgressBar'
-import { useUploadVideo } from '@/hooks/useVideos'
+import { useUploadVideo, type UploadPhase } from '@/hooks/useVideos'
 import { useToast } from '@/context/ToastContext'
 import { toErrorMessage } from '@/api/client'
 import {
   ACCEPTED_IMAGE_TYPES,
   ACCEPTED_VIDEO_TYPES,
+  MAX_THUMB_LABEL,
+  MAX_VIDEO_LABEL,
+  resolveVideoContentType,
   uploadSchema,
   validateThumbnailFile,
   validateVideoFile,
   type UploadValues,
 } from '@/lib/validation'
 
-/** Idioma não é escolhido na UI: o backend trata tudo como PT-BR. Enviado
- *  fixo no metadata porque o campo é obrigatório no VideoUploadRequest. */
-const DEFAULT_LANGUAGE = 'PT-BR'
+/** Texto de cada fase do upload em três passos.
+ *
+ *  Só a fase `uploading` tem progresso real: as outras duas são chamadas
+ *  curtas à API. Por isso a barra some fora dela — uma barra parada em 100%
+ *  durante o confirm parece travada. */
+const PHASE_LABEL: Record<Exclude<UploadPhase, 'idle'>, string> = {
+  preparing: 'Preparando envio…',
+  uploading: 'Enviando o vídeo…',
+  confirming: 'Confirmando no servidor…',
+  done: 'Concluído',
+}
 
 const STATUS_OPTIONS = [
   { value: 'PUBLISHED', label: 'Publicar agora — visível para todos' },
@@ -50,6 +61,13 @@ export function UploadPage() {
   const [thumbError, setThumbError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
+  const [phase, setPhase] = useState<UploadPhase>('idle')
+  /** Permite abortar o PUT em andamento. O `signal` já era aceito pelo hook e
+   *  pelo serviço — só ninguém o fornecia, então um envio longo, uma vez
+   *  começado, não tinha como ser interrompido pela interface: o botão de
+   *  cancelar ficava desabilitado e a própria tela pedia para não fechar a
+   *  página. A saída era abandonar a aba. */
+  const abortRef = useRef<AbortController | null>(null)
 
   const {
     register,
@@ -57,7 +75,7 @@ export function UploadPage() {
     formState: { errors },
   } = useForm<UploadValues>({
     resolver: zodResolver(uploadSchema),
-    defaultValues: { titulo: '', description: '', status: 'PUBLISHED' },
+    defaultValues: { title: '', description: '', status: 'PUBLISHED' },
   })
 
   const pickVideo = (next: File | null) => {
@@ -85,26 +103,58 @@ export function UploadPage() {
   const onSubmit = async (values: UploadValues) => {
     if (!checkFiles() || !file || !thumbnail) return
 
+    // Reconfirmado aqui, e não só dentro de validateVideoFile, porque este é o
+    // valor que vai para o metadata E para o header do PUT. Sem contentType
+    // válido não há upload possível — barrar antes de gastar a rede.
+    const contentType = resolveVideoContentType(file)
+    if (!contentType) {
+      setFileError('Formato não aceito. Use MP4, WebM, MOV ou MKV.')
+      return
+    }
+
     setFormError(null)
     setProgress(0)
 
+    const controller = new AbortController()
+    abortRef.current = controller
+
     try {
       await upload.mutateAsync({
+        signal: controller.signal,
         metadata: {
-          titulo: values.titulo,
+          title: values.title,
           description: values.description,
-          language: DEFAULT_LANGUAGE,
-          status: values.status,
+          contentType,
+          // Obrigatório desde 2026-08-31: sem ele o passo 1 volta 413. Vai o
+          // tamanho real do arquivo — declarar menos só adia a rejeição para o
+          // fim do upload, quando o backend confere o objeto no storage.
+          fileSize: file.size,
         },
         file,
         thumbnail,
+        status: values.status,
+        onPhase: setPhase,
         onProgress: setProgress,
       })
-      showToast('Vídeo enviado com sucesso!', 'success')
+      showToast(
+        values.status === 'DRAFT'
+          ? 'Rascunho salvo com sucesso!'
+          : 'Vídeo enviado com sucesso!',
+        'success',
+      )
       navigate('/profile', { replace: true })
     } catch (error) {
-      setFormError(toErrorMessage(error))
+      // Cancelamento é escolha do usuário, não falha: um alerta vermelho
+      // "cancelado" acusaria a pessoa de um erro que ela não cometeu.
+      if (controller.signal.aborted) {
+        showToast('Envio cancelado.', 'info')
+      } else {
+        setFormError(toErrorMessage(error))
+      }
       setProgress(0)
+      setPhase('idle')
+    } finally {
+      abortRef.current = null
     }
   }
 
@@ -127,7 +177,7 @@ export function UploadPage() {
       </header>
 
       {formError && (
-        <Alert tone="error" className="mb-5">
+        <Alert tone="error" focusOnMount className="mb-5">
           {formError}
         </Alert>
       )}
@@ -144,16 +194,18 @@ export function UploadPage() {
               accept={ACCEPTED_VIDEO_TYPES.join(',')}
               file={file}
               onChange={pickVideo}
-              hint="MP4, WebM, MOV ou MKV — até 15 GB"
+              hint={`MP4, WebM, MOV ou MKV — até ${MAX_VIDEO_LABEL}`}
               icon={<Film size={26} className="text-surface-600" />}
+              // Vai como prop para o erro ficar ligado ao input por
+              // aria-describedby, em vez de ser um parágrafo solto ao lado.
+              error={fileError ?? undefined}
             />
             {file && !fileError && (
-              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-success-500">
-                <CheckCircle2 size={13} />
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-success-ink">
+                <CheckCircle2 size={13} aria-hidden="true" />
                 {formatBytes(file.size)}
               </p>
             )}
-            {fileError && <p className="mt-1.5 text-xs font-medium text-danger-400">{fileError}</p>}
           </div>
 
           <div>
@@ -162,21 +214,19 @@ export function UploadPage() {
               accept={ACCEPTED_IMAGE_TYPES.join(',')}
               file={thumbnail}
               onChange={pickThumbnail}
-              hint="JPG, PNG, WebP ou AVIF — até 15 MB"
+              hint={`JPG, PNG, WebP ou AVIF — até ${MAX_THUMB_LABEL}`}
               icon={<ImageIcon size={26} className="text-surface-600" />}
               showImagePreview
+              error={thumbError ?? undefined}
             />
-            {thumbError && (
-              <p className="mt-1.5 text-xs font-medium text-danger-400">{thumbError}</p>
-            )}
           </div>
         </div>
 
         <Input
           label="Título"
           placeholder="Um título claro e direto"
-          error={errors.titulo?.message}
-          {...register('titulo')}
+          error={errors.title?.message}
+          {...register('title')}
         />
 
         <Textarea
@@ -195,29 +245,53 @@ export function UploadPage() {
           ))}
         </Select>
 
-        {isUploading && (
+        {isUploading && phase !== 'idle' && (
           <div className="rounded-xl border border-surface-200 bg-surface-100 p-4">
             <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="font-medium text-surface-800">
-                {progress < 100 ? 'Enviando arquivos…' : 'Processando no servidor…'}
-              </span>
-              <span className="font-semibold tabular-nums text-brand-link">{progress}%</span>
+              <span className="font-medium text-surface-800">{PHASE_LABEL[phase]}</span>
+              {phase === 'uploading' && (
+                <span className="font-semibold tabular-nums text-brand-link">{progress}%</span>
+              )}
             </div>
-            <ProgressBar value={progress} />
+            {/* A barra só aparece na fase que tem progresso medível. Nas outras
+                duas o indeterminado é honesto: são chamadas curtas à API, sem
+                percentual algum a mostrar. */}
+            {phase === 'uploading' ? (
+              <ProgressBar value={progress} label="Enviando o vídeo" />
+            ) : (
+              <div className="h-2 overflow-hidden rounded-full bg-surface-200">
+                <div className="h-full w-1/3 animate-pulse rounded-full bg-brand-500" />
+              </div>
+            )}
+            {/* Anuncia em marcos de 25%, não a cada 1%: a barra atualiza dezenas
+                de vezes e um live region a cada ponto percentual tornaria o
+                leitor de tela inutilizável. */}
+            <p role="status" className="sr-only">
+              {phase === 'uploading'
+                ? `Envio em ${Math.floor(progress / 25) * 25} por cento.`
+                : PHASE_LABEL[phase]}
+            </p>
             <p className="mt-2 text-xs text-surface-600">
-              Não feche esta página até o envio terminar.
+              Não feche esta página até o envio terminar. Para interromper, use
+              “Cancelar envio”.
             </p>
           </div>
         )}
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          {/* Durante o envio este botão ABORTA em vez de sair da tela: sair
+              deixaria o PUT correndo em segundo plano sem nada para
+              acompanhá-lo. O rótulo muda junto com a ação — um botão que faz
+              duas coisas diferentes precisa dizer qual delas fará agora. */}
           <Button
             type="button"
             variant="secondary"
-            onClick={() => navigate(-1)}
-            disabled={isUploading}
+            onClick={() => {
+              if (isUploading) abortRef.current?.abort()
+              else navigate(-1)
+            }}
           >
-            Cancelar
+            {isUploading ? 'Cancelar envio' : 'Cancelar'}
           </Button>
           <Button type="submit" size="lg" isLoading={isUploading}>
             {!isUploading && <UploadCloud size={17} />}

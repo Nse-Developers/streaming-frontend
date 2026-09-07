@@ -18,9 +18,16 @@ export function AuthShell({
   wide?: boolean
 }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-surface-0 px-4 py-10 sm:px-6">
+    // `min-h-dvh` e não `min-h-screen`: o `vh` do Safari iOS conta a tela com a
+    // barra de endereço recolhida (~60px a mais do que se vê), então o cartão
+    // centrado nascia deslocado para baixo e o rodapé "Criar conta" caía fora
+    // da dobra — justamente o link que a tela de login precisa oferecer.
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-surface-0 px-4 py-10 sm:px-6">
       <main className={wide ? 'w-full max-w-lg' : 'w-full max-w-[400px]'}>
         <div className="mb-8 flex justify-center">
+          {/* Vai para a LANDING ("/"), não para o catálogo: quem está no
+              login/registro ainda não tem sessão, e a landing é a página que
+              apresenta o produto a essa pessoa. */}
           <Link to="/" className="rounded-md focus-ring" aria-label="Byou — início">
             <Logo className="text-[1.7rem]" />
           </Link>

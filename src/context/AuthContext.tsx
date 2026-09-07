@@ -7,8 +7,15 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { authApi } from '@/api/services'
-import { ApiError, onUnauthorized } from '@/api/client'
+import {
+  ApiError,
+  clearCsrfToken,
+  clearSessionToken,
+  onUnauthorized,
+  refreshCsrfToken,
+} from '@/api/client'
 import type {
   UserAuth,
   UserRegisterRequest,
@@ -84,6 +91,7 @@ function toAuthUser(response: UserResponse): AuthUser {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isReady, setIsReady] = useState(false)
+  const queryClient = useQueryClient()
 
   /** Pergunta ao servidor quem está logado agora, a partir do cookie que o
    *  navegador já anexou sozinho. 401/403 (ou qualquer erro que não seja de
@@ -98,19 +106,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // inválida — só que não deu para confirmar agora. Mantém o usuário
       // atual em vez de derrubar a sessão por um problema de conectividade.
       if (error instanceof ApiError && error.isNetworkError) return null
+
+      // Só 401/403 provam que a credencial foi RECUSADA. Um 500 aqui é falha
+      // do servidor, não sessão inválida: descartar o token nesse caso faria o
+      // usuário ter de logar de novo por causa de um erro passageiro que nem
+      // era dele. Nesses o usuário sai da tela logada, mas a credencial fica —
+      // o próximo boot tenta de novo.
+      //
+      // A checagem de `exp` do client.ts cobre o caso comum, mas só funciona
+      // se o token for um JWT legível. Aqui quem responde é o servidor, então
+      // pega também token opaco, sessão revogada antes da hora e chave trocada
+      // no backend — casos em que o `exp` ainda diria "válido".
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        clearSessionToken()
+        clearCsrfToken()
+      }
       setUser(null)
       return false
     }
   }, [])
 
-  // Ao montar, pergunta ao servidor se o cookie (se houver) ainda é válido.
-  // Isto substitui a leitura de localStorage: a única fonte de verdade agora
-  // é o próprio backend.
+  // Ao montar, pergunta ao servidor se a credencial que temos ainda vale — o
+  // token restaurado do sessionStorage, ou o cookie onde ele funciona. Quem
+  // decide se a sessão é válida é sempre o backend: o token no storage prova
+  // apenas que houve um login, não que ele ainda está de pé.
   useEffect(() => {
     let cancelled = false
-    void refreshUser().finally(() => {
-      if (!cancelled) setIsReady(true)
-    })
+    // O token CSRF vive só em memória, então um refresh de página o perde
+    // enquanto o cookie de sessão sobrevive. Sem repô-lo aqui, a sessão
+    // restaurada lê tudo mas falha em toda escrita com 403 até o próximo
+    // login. Buscar antes de refreshUser garante que a interface só fica
+    // pronta com o par sessão + token completo.
+    void refreshCsrfToken()
+      .then(() => refreshUser())
+      .finally(() => {
+        if (!cancelled) setIsReady(true)
+      })
     return () => {
       cancelled = true
     }
@@ -123,6 +154,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       await authApi.login({ email, password })
+      // Troca de sessão no mesmo navegador: descarta o cache da sessão
+      // anterior ANTES de assumir a nova. Sem isto, chaves sem identidade de
+      // usuário (['videos'], ['users'], ['comments', id]) serviriam ao novo
+      // usuário o que o anterior carregou.
+      queryClient.clear()
       // O login não devolve o usuário no corpo (só o Set-Cookie) — busca em
       // seguida. Se isto falhar, o cookie não pegou por algum motivo (bloqueio
       // de terceiros, CSRF mal configurado etc.) e é melhor avisar já.
@@ -134,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )
       }
     },
-    [refreshUser],
+    [refreshUser, queryClient],
   )
 
   const register = useCallback(
@@ -150,13 +186,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await authApi.logout()
+    } catch {
+      // Sair NÃO pode falhar. `finally` limpava o estado mas relançava o erro,
+      // que subia como "Uncaught (in promise)" e chegava à interface — o
+      // usuário via "Você não tem permissão para fazer isso" ao clicar em
+      // sair, num fluxo que do ponto de vista dele deu certo.
+      //
+      // Avisar o servidor é o melhor esforço: o que efetiva a saída é
+      // descartar a credencial local, e isso acontece abaixo de todo modo.
+      // Um 403 aqui só significa que a sessão já não valia no servidor.
     } finally {
       // Limpa o estado local mesmo se a chamada falhar (ex.: já sem sessão) —
-      // o objetivo é o usuário sair da área logada, o cookie HttpOnly quem
-      // decide se de fato foi revogado no servidor.
+      // o objetivo é o usuário sair da área logada. authApi.logout() ja
+      // descartou o token do storage; o JWT segue válido no servidor até
+      // expirar, porque não há revogação.
       setUser(null)
+      // E descarta TODO o cache de dados da sessão. `setUser(null)` só apaga
+      // quem está logado; as respostas já buscadas continuavam vivas no
+      // QueryClient (gcTime padrão de 5 min) e o logout é navegação SPA, sem
+      // reload que as apagasse. Num computador compartilhado, o próximo a
+      // entrar recebia do cache o feed, os comentários e — para um admin que
+      // passou por /admin — a lista de usuários com os e-mails de todos.
+      queryClient.clear()
     }
-  }, [])
+  }, [queryClient])
 
   const value = useMemo<AuthContextValue>(() => {
     const isAdmin = user?.userAuth === 'ADMIN'

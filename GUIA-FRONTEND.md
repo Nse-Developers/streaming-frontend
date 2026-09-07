@@ -39,6 +39,11 @@ Tudo que importa vive em [src/](src/). Traduzindo para termos de backend:
 |---|---|---|
 | [src/pages/](src/pages/) | **Uma tela = um arquivo.** É aqui que 90% dos textos estão | Controller + view |
 | [src/components/](src/components/) | Pedaços reaproveitados de tela (botão, card, modal) | Classes utilitárias / componentes compartilhados |
+| ↳ [ui/](src/components/ui/) | Peças genéricas: botão, input, modal, alerta | — |
+| ↳ [layout/](src/components/layout/) | Cabeçalho, menus, moldura das telas | — |
+| ↳ [video/](src/components/video/) | Card, player, comentários, destaque | — |
+| ↳ [user/](src/components/user/) | Nome clicável, botão seguir, contador | — |
+| ↳ [auth/](src/components/auth/) | Guards de rota e moldura de login/cadastro | Filtro de segurança |
 | [src/api/](src/api/) | Chamadas HTTP para a sua API | Client / Feign |
 | [src/hooks/](src/hooks/) | Busca e cacheia dados da API para as telas | Service |
 | [src/lib/](src/lib/) | Regras e utilitários (validação, formatação) | Utils / Validator |
@@ -66,7 +71,8 @@ texto, o caminho mais rápido é buscar o texto em si no VS Code com
 | Home (feed de vídeos) | [src/pages/HomePage.tsx](src/pages/HomePage.tsx) |
 | Página de um vídeo | [src/pages/VideoPage.tsx](src/pages/VideoPage.tsx) |
 | Enviar vídeo | [src/pages/UploadPage.tsx](src/pages/UploadPage.tsx) |
-| Perfil | [src/pages/ProfilePage.tsx](src/pages/ProfilePage.tsx) |
+| Meu perfil | [src/pages/ProfilePage.tsx](src/pages/ProfilePage.tsx) |
+| Perfil público de outra pessoa (`/users/{id}`) | [src/pages/UserProfilePage.tsx](src/pages/UserProfilePage.tsx) |
 | Administração | [src/pages/AdminPage.tsx](src/pages/AdminPage.tsx) |
 | "Você não tem acesso" (403) | [src/pages/ForbiddenPage.tsx](src/pages/ForbiddenPage.tsx) |
 | "Página não encontrada" (404) | [src/pages/NotFoundPage.tsx](src/pages/NotFoundPage.tsx) |
@@ -97,12 +103,14 @@ texto exibido. Pode ignorar completamente.
 
 - Título da aba do navegador → [index.html:14](index.html#L14) — `<title>Byou — streaming</title>`
 - Nome da marca "Byou." no topo → [src/components/layout/Logo.tsx:6](src/components/layout/Logo.tsx#L6)
-- Título da página de upload → [src/pages/UploadPage.tsx:120-125](src/pages/UploadPage.tsx#L120-L125)
+- Título da página de upload ("Enviar um vídeo") → [src/pages/UploadPage.tsx:120-121](src/pages/UploadPage.tsx#L120-L121)
 - "Ainda não há vídeos publicados" → [src/pages/HomePage.tsx:105](src/pages/HomePage.tsx#L105)
 - "Nada encontrado para..." (busca vazia) → [src/pages/HomePage.tsx:79](src/pages/HomePage.tsx#L79)
-- "Você não tem acesso a esta área" → [src/pages/ForbiddenPage.tsx:29](src/pages/ForbiddenPage.tsx#L29)
+- "Você não tem acesso a esta área" → [src/pages/ForbiddenPage.tsx:25](src/pages/ForbiddenPage.tsx#L25)
 - Placeholder da busca ("Buscar vídeos e criadores") → [src/components/layout/Header.tsx](src/components/layout/Header.tsx) (aparece 2x: versão desktop e mobile — troque as duas)
-- Títulos das telas de login/cadastro → [src/pages/LoginPage.tsx:45](src/pages/LoginPage.tsx#L45) e [src/pages/RegisterPage.tsx:97-98](src/pages/RegisterPage.tsx#L97-L98)
+- Títulos das telas de login/cadastro → [src/pages/LoginPage.tsx:45](src/pages/LoginPage.tsx#L45) (`title="Entrar"`) e [src/pages/RegisterPage.tsx:97-98](src/pages/RegisterPage.tsx#L97-L98) (`title` e `subtitle`)
+- "Seguir" / "Seguindo" e os avisos do botão → [src/components/user/FollowButton.tsx](src/components/user/FollowButton.tsx)
+- "Este perfil não existe ou foi removido." → [src/api/services.ts:82](src/api/services.ts#L82) (tratamento do 404 em `authApi.getUserById`)
 
 ### Textos que NÃO estão nas páginas
 
@@ -110,12 +118,13 @@ Estes ficam centralizados — mude num lugar só e vale para o sistema inteiro:
 
 | Texto | Arquivo |
 |---|---|
-| **Mensagens de erro de HTTP** (400, 401, 403, 404, 500, "sem conexão") | [src/api/client.ts:59-67](src/api/client.ts#L59-L67) — objeto `FALLBACK_BY_STATUS` |
+| **Mensagens de erro de HTTP** (400, 401, 403, 404, 409, 413, 500) | [src/api/client.ts:55-63](src/api/client.ts#L55-L63) — objeto `FALLBACK_BY_STATUS` |
+| **Mensagem genérica de erro** ("Algo deu errado.") | [src/api/client.ts:99-104](src/api/client.ts#L99-L104) — função `toErrorMessage` |
 | **Mensagens de erro de formulário** ("Informe seu e-mail", "Mínimo de 2 caracteres") | [src/lib/validation.ts](src/lib/validation.ts) — segundo argumento de cada regra |
-| **Nomes dos itens do menu** (Início, Enviar vídeo, Perfil, Administração) | [src/lib/nav.ts:19-35](src/lib/nav.ts#L19-L35) |
-| **Status do vídeo** (Publicado, Rascunho, Privado, Processando) | [src/lib/video.ts:70-76](src/lib/video.ts#L70-L76) — `STATUS_LABEL` |
-| **Tipos de conta** (Criador, Espectador) | [src/components/layout/Header.tsx:9](src/components/layout/Header.tsx#L9) e [src/pages/ForbiddenPage.tsx:6](src/pages/ForbiddenPage.tsx#L6) — `ACCOUNT_LABEL` |
-| **Formatação de números e datas** ("3 mil visualizações", "há 2 dias") | [src/lib/format.ts](src/lib/format.ts) |
+| **Nomes dos itens do menu** (Início, Enviar vídeo, Perfil, Administração) | [src/lib/nav.ts:15-32](src/lib/nav.ts#L15-L32) — `NAV_ITEMS` |
+| **Status do vídeo** (Publicado, Rascunho, Privado, Processando, Excluído) | [src/lib/video.ts:90-96](src/lib/video.ts#L90-L96) — `STATUS_LABEL` |
+| **Tipos de conta** (Criador, Espectador) | `ACCOUNT_LABEL`, declarado em **quatro** arquivos: [Header.tsx:9](src/components/layout/Header.tsx#L9), [ForbiddenPage.tsx:6](src/pages/ForbiddenPage.tsx#L6), [ProfilePage.tsx:41](src/pages/ProfilePage.tsx#L41) e [UserProfilePage.tsx:29](src/pages/UserProfilePage.tsx#L29) — mude nos quatro |
+| **Formatação de números e datas** ("3 mil visualizações", "há 2 dias") | [src/lib/format.ts](src/lib/format.ts) — `formatViews`, `formatCompact`, `formatLongDateBR`, `formatRelativeDate` |
 
 > Sobre o erro de HTTP: se o backend mandar `message` no corpo da resposta, é
 > **essa** mensagem que aparece na tela. O `FALLBACK_BY_STATUS` só entra quando
@@ -184,10 +193,15 @@ essa é a autoridade real. Mudar aqui não afeta a segurança do servidor.
 
 O que dá para ajustar:
 
-- **Política de senha** — [src/lib/validation.ts:41-49](src/lib/validation.ts#L41-L49): mínimo 8 caracteres, exige minúscula, maiúscula, número e símbolo. Cada `.regex(...)` é uma exigência; apagar a linha remove a exigência.
+- **Política de senha** — [src/lib/validation.ts:42-49](src/lib/validation.ts#L42-L49): mínimo 8 caracteres (máximo 72, limite do BCrypt), exige minúscula, maiúscula, número e símbolo. Cada `.regex(...)` é uma exigência; apagar a linha remove a exigência.
 - **Tamanho máximo dos campos** — `.max(60, 'Máximo de 60 caracteres.')` — troque o número **e** o texto junto.
-- **Limites de upload** — [src/lib/validation.ts:190-191](src/lib/validation.ts#L190-L191): `MAX_VIDEO_BYTES` (15 GB) e `MAX_THUMB_BYTES` (15 MB).
-- **Formatos aceitos no upload** — `ACCEPTED_VIDEO_TYPES` e `ACCEPTED_IMAGE_TYPES`, logo abaixo.
+- **Limites de upload** — [src/lib/validation.ts:154-155](src/lib/validation.ts#L154-L155): `MAX_VIDEO_BYTES` (**2 GB**) e `MAX_THUMB_BYTES` (15 MB).
+- **Formatos aceitos no upload** — [src/lib/validation.ts:157-158](src/lib/validation.ts#L157-L158): `ACCEPTED_VIDEO_TYPES` e `ACCEPTED_IMAGE_TYPES`.
+
+> O limite de vídeo caiu de 15 GB para 2 GB para acompanhar o backend. Se
+> mexer em `MAX_VIDEO_BYTES`, mude também as mensagens que citam o número:
+> `'O vídeo passa de 2 GB.'` ([validation.ts:181](src/lib/validation.ts#L181)) e
+> o texto exibido na tela de upload ([UploadPage.tsx](src/pages/UploadPage.tsx)).
 
 > Ao mudar um limite, confira o valor equivalente no backend. Se o front
 > permitir mais que o servidor, o usuário sobe um arquivo de 20 min e leva 413
@@ -205,6 +219,24 @@ As proteções espelham o backend:
 - `<RequireAuth />` → precisa estar logado
 - `<RequireCreator />` → precisa ser CREATORS ou ADMIN
 - `<RequireAdmin />` → precisa ser ADMIN
+- `<RedirectIfAuthenticated />` → quem já está logado não vê login/cadastro
+
+Mapa atual das URLs ([src/App.tsx](src/App.tsx)):
+
+| URL | Tela | Proteção |
+|---|---|---|
+| `/login`, `/register` | Login, Cadastro | `RedirectIfAuthenticated` |
+| `/` | Home | `RequireAuth` |
+| `/videos/:id` | Página do vídeo | `RequireAuth` |
+| `/profile` | Meu perfil | `RequireAuth` |
+| `/users/:id` | Perfil público de outra pessoa | `RequireAuth` |
+| `/upload` | Enviar vídeo | `RequireCreator` |
+| `/admin` | Administração | `RequireAdmin` |
+| `/403`, `*` | Sem acesso, Não encontrado | — |
+
+> `/users/:id` fica só com `RequireAuth` de propósito: a rota do backend
+> (`GET /auth/user/{id}`) libera para CREATORS **e** VIEWERS — ou seja, todo
+> usuário autenticado. Não existe papel logado que devesse cair no 403 aqui.
 
 Sem sessão → manda para `/login` guardando o destino. Logado mas sem o papel →
 manda para `/403`. Vale inclusive para URL colada direto no navegador.
@@ -236,6 +268,14 @@ agrupado por recurso: `authApi`, `videoApi`, `categoryApi`, `commentApi`,
 `commentLikeApi`, `followApi`. Se você renomear uma rota no backend, é o
 **único** arquivo do front que precisa mudar.
 
+Duas armadilhas de nome já documentadas no arquivo:
+
+- **`/auth/user/{id}` (singular) ≠ `/auth/users` (plural).** O singular é o
+  perfil público e exige só sessão; o plural lista todos e exige ADMIN.
+- **`/follow/users/{id}` ≠ `/follow/users/{id}/following`.** O primeiro é o
+  **contador** de seguidores, o segundo é a **lista** de quem a pessoa segue.
+  Trocar um pelo outro não dá erro de compilação — só devolve a coisa errada.
+
 Dois pontos que costumam gerar dúvida:
 
 - **Sessão:** vive no cookie `HttpOnly` `byou_session`. O front nunca lê nem
@@ -261,9 +301,11 @@ Dois pontos que costumam gerar dúvida:
 | Mudou um campo do JSON de resposta | [src/api/types.ts](src/api/types.ts) — e o `npm run typecheck` aponta as telas afetadas |
 | Renomeou o id do vídeo (`videId` / `video_id`) | [src/lib/video.ts](src/lib/video.ts), função `readId` — **uma linha**, já preparado para isso |
 | Novo valor de status de vídeo | [src/lib/video.ts](src/lib/video.ts) (`STATUS_LABEL`) + `VideoStatus` em [src/api/types.ts](src/api/types.ts) |
-| Novo tipo de conta além de CREATORS/VIEWERS | `ACCOUNT_LABEL` em [Header.tsx](src/components/layout/Header.tsx) e [ForbiddenPage.tsx](src/pages/ForbiddenPage.tsx), + guards em [RouteGuards.tsx](src/components/auth/RouteGuards.tsx) |
+| Novo tipo de conta além de CREATORS/VIEWERS | `ACCOUNT_LABEL` nos **quatro** arquivos listados na seção 3, + guards em [RouteGuards.tsx](src/components/auth/RouteGuards.tsx) |
 | Mudou regra de permissão no `SecurityConfig` | [src/App.tsx](src/App.tsx) (qual guard envolve a rota) |
-| Mudou limite de tamanho de upload | [src/lib/validation.ts](src/lib/validation.ts) (`MAX_VIDEO_BYTES` / `MAX_THUMB_BYTES`) |
+| Mudou limite de tamanho de upload | [src/lib/validation.ts](src/lib/validation.ts) (`MAX_VIDEO_BYTES` / `MAX_THUMB_BYTES`) + os textos que citam o número |
+| Passou a devolver o **id do autor** no vídeo ou no comentário | Nada quebra — [UserLink.tsx](src/components/user/UserLink.tsx) já vira link sozinho quando o id chega. Basta mapear o campo em [src/api/types.ts](src/api/types.ts) |
+| Mexeu nas rotas de follow | [src/api/services.ts](src/api/services.ts) (`followApi`) e os tipos `FollowResponse` / `NumberOfFollowersResponse` em [src/api/types.ts](src/api/types.ts) |
 
 **`npm run typecheck` é seu amigo.** Se você mexer em
 [src/api/types.ts](src/api/types.ts), ele lista exatamente quais arquivos
@@ -298,6 +340,43 @@ padronizar, perigoso para ajuste pontual — para mexer em um botão só, mude o
 `VideoCard.tsx` (card do feed), `HeroVideo.tsx` (destaque grande da home),
 `VideoPlayer.tsx`, `CommentSection.tsx`.
 
+**Player de vídeo** ([src/components/video/VideoPlayer.tsx](src/components/video/VideoPlayer.tsx)):
+
+- **Volume** é 0–100 na tela e 0–1 no elemento `<video>` — a conversão é só na
+  exibição. O valor fica no localStorage sob `byou.player.volume`
+  ([VideoPlayer.tsx:27](src/components/video/VideoPlayer.tsx#L27)), para não
+  voltar a 100% a cada vídeo.
+- **Atalhos de teclado** ([VideoPlayer.tsx:175-209](src/components/video/VideoPlayer.tsx#L175-L209)):
+  `espaço`/`K` play-pause, `←`/`→` 5 s, `↑`/`↓` volume, `M` mudo, `F` tela cheia.
+  Cada atalho é um `case` — para mudar a tecla, troque a letra do `case`.
+- **Sumir dos controles**: 3 s de inatividade com o vídeo rodando, em
+  `HIDE_DELAY_MS` ([VideoPlayer.tsx:33](src/components/video/VideoPlayer.tsx#L33)).
+- As animações do player estão em [src/index.css](src/index.css), não no componente.
+
+**Perfil público e seguir** — recursos novos, espalhados por poucos arquivos:
+
+| Peça | Arquivo |
+|---|---|
+| Tela `/users/{id}` | [src/pages/UserProfilePage.tsx](src/pages/UserProfilePage.tsx) |
+| Nome clicável (vídeo e comentários) | [src/components/user/UserLink.tsx](src/components/user/UserLink.tsx) |
+| Botão Seguir / Seguindo | [src/components/user/FollowButton.tsx](src/components/user/FollowButton.tsx) |
+| Contador de seguidores | [src/components/user/FollowerCount.tsx](src/components/user/FollowerCount.tsx) |
+| Busca dos dados (seguidores, quem sigo, seguir/desseguir) | [src/hooks/useFollow.ts](src/hooks/useFollow.ts) |
+| Busca do perfil público | [src/hooks/useUsers.ts](src/hooks/useUsers.ts) |
+| Rotas HTTP | [src/api/services.ts](src/api/services.ts) — `followApi` e `authApi.getUserById` |
+| Monta a URL `/users/{id}` | [src/lib/video.ts:84](src/lib/video.ts#L84) — `profilePath` |
+
+Dois detalhes que economizam tempo:
+
+- **`UserLink` vira texto simples quando não há id.** Não é bug de estilo: sem
+  o id do autor não há como montar um link válido, e um link para 404 é pior
+  que texto. Quando o backend passar a devolver o id do autor no vídeo/comentário,
+  o nome vira link sozinho.
+- **O botão Seguir some no próprio perfil**, porque o backend responde 400
+  ("the user cannot follow themselves"). O estado "Seguindo" vem do servidor
+  (`GET /follow/users/{id}/following`), não do localStorage — por isso está
+  certo já no primeiro render e sobrevive a trocar de dispositivo.
+
 ---
 
 ## 10. Sequência segura para mexer sem quebrar
@@ -318,7 +397,26 @@ seção 3.
 
 ---
 
-## 11. Outros documentos
+## 11. O que mudou desde a primeira versão deste guia
+
+Resumo do que existe hoje e não existia quando o guia foi escrito (12/08/2026),
+para quem já conhecia o projeto:
+
+| Novidade | Onde |
+|---|---|
+| **Perfil público** de outro usuário em `/users/{id}`, aberto pelo nome no vídeo e nos comentários | [UserProfilePage.tsx](src/pages/UserProfilePage.tsx), [UserLink.tsx](src/components/user/UserLink.tsx) — seção 9 |
+| **Seguir / deixar de seguir** e contador de seguidores | [src/components/user/](src/components/user/), [useFollow.ts](src/hooks/useFollow.ts) — seção 9 |
+| **Player**: volume 0–100 lembrado entre sessões, atalhos de teclado, controles que somem sozinhos | [VideoPlayer.tsx](src/components/video/VideoPlayer.tsx) — seção 9 |
+| **Limite de upload de vídeo caiu de 15 GB para 2 GB** | [validation.ts:154](src/lib/validation.ts#L154) — seção 5 |
+| Mensagem de erro quando a API não responde | [client.ts](src/api/client.ts) — seção 3 |
+
+As referências de linha deste guia foram conferidas contra o código em
+16/08/2026. Se uma linha não bater, o arquivo é o que vale — busque pelo nome
+citado (`FALLBACK_BY_STATUS`, `MAX_VIDEO_BYTES`, `STATUS_LABEL`) em vez do número.
+
+---
+
+## 12. Outros documentos
 
 - [README.md](README.md) — visão geral, decisões de arquitetura e segurança no cliente
 - `PENDENCIAS.md` — **não existe neste repositório.** O README o cita em três

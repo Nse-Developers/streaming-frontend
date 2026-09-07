@@ -33,7 +33,9 @@
   --color-accent-ink: var(--accent-ink);
 
   /* Success/danger são semânticos e independentes da marca. Success ficou no
-     verde-folha (não menta) para não ser confundido com o accent. */
+     verde-folha (não menta) para não ser confundido com o accent.
+     Estes degraus são para PREENCHIMENTO (fundo de badge, barra de progresso);
+     para TEXTO use `danger-ink`/`success-ink`, que trocam por tema. */
   --color-success-400: #4ade80;
   --color-success-500: #22b562;
   --color-success-600: #17924e;
@@ -41,6 +43,22 @@
   --color-danger-400: #f87171;
   --color-danger-500: #e23f3f;
   --color-danger-600: #b52a2a;
+  --color-danger-700: #9b1c1c;
+
+  /* Tons semânticos legíveis como TEXTO em qualquer tema — mesma ideia do
+     `brand-link`. Existem porque danger/success eram valores FIXOS entre os
+     temas, calibrados no fundo escuro: no tema claro `danger-400` sobre um
+     card branco dá 2.77:1 e `success-500` dá 2.67:1, abaixo do mínimo 4.5:1 da
+     WCAG AA — e `danger-400` é a cor de TODA mensagem de erro de formulário.
+     Ou seja: exatamente quem precisava ler um erro não conseguia. */
+  --color-danger-ink: var(--danger-ink);
+  --color-success-ink: var(--success-ink);
+  --color-star-ink: var(--star-ink);
+
+  /* Cor do anel de foco, por tema. `brand-400` fixo dava só 3.0:1 sobre o
+     surface-0 do tema claro — exatamente no limite da WCAG 1.4.11 para
+     componentes não textuais, e abaixo dele em qualquer variação. */
+  --color-focus-ring: var(--focus-ring-color);
 
   --shadow-elevated: 0 12px 32px -8px rgb(0 0 0 / 0.45);
 
@@ -81,26 +99,60 @@
 
   --brand-link: #63b3ff; /* brand-300: 8.68:1 no fundo escuro */
   --accent-ink: #4de3b4; /* menta: 11.94:1 no fundo escuro */
+  --danger-ink: #f87171; /* danger-400: 6.99:1 no fundo escuro */
+  --success-ink: #4ade80; /* success-400: 11.10:1 no fundo escuro */
+  --focus-ring-color: #2a90f5; /* brand-400: 5.90:1 sobre o surface-0 */
+  /* Estrela de avaliacao. Ambar claro: 10.89:1 sobre o surface-0 e 9.62:1
+     sobre o surface-100 (fundo do card onde a estrela aparece). O amarelo
+     "puro" (#facc15) chegava a 12.63:1, mas lia como aviso, nao como nota. */
+  --star-ink: #f5b845;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
 
-  /* Cinza-azulado muito claro (não branco puro), mesmo raciocínio de viés. */
-  --surface-0: #f6f7f9;
-  --surface-50: #eef1f5;
+  /* Cinza-azulado muito claro (não branco puro), mesmo raciocínio de viés.
+     O viés azul aqui é mais explícito que um cinza neutro: os fundos puxam
+     levemente para o brand, o que faz o azul dos botões e links parecer parte
+     do ambiente em vez de um respingo isolado. Ainda são neutros — a saturação
+     é baixa o bastante para não competir com o conteúdo. */
+  --surface-0: #f2f5fa;
+  --surface-50: #e9eef7;
   --surface-100: #ffffff;
-  --surface-200: #e4e8ee;
-  --surface-300: #ccd3dc;
-  --surface-400: #a3aeba;
-  --surface-500: #7a8695;
-  --surface-600: #5b6673;
-  --surface-700: #414a55;
-  --surface-800: #1d232b;
-  --surface-900: #10151b;
+  --surface-200: #dee6f2;
+  --surface-300: #c4d0e2;
+  --surface-400: #9aa9c0;
+  --surface-500: #71829b;
+  --surface-600: #556478;
+  --surface-700: #3c4859;
+  --surface-800: #1a212c;
+  --surface-900: #0e141d;
 
-  --brand-link: #0a58b4; /* brand-600: 6.39:1 no fundo claro */
+  /* brand-600 (#0a58b4) passava contraste, mas lia como azul-marinho: escuro
+     demais para parecer "a cor da marca". Este é o mesmo tom puxado para o
+     azul-elétrico do brand-500, mantendo folga de contraste: 5.29:1 sobre o
+     surface-0 e 4.96:1 sobre o surface-50 (o fundo mais claro em que ele
+     aparece), ambos acima do mínimo 4.5:1 da WCAG AA para texto. */
+  --brand-link: #0b62cc;
   --accent-ink: #0f7a5c; /* menta escurecida: 4.95:1 no fundo claro */
+  /* Escurecidos para o fundo claro. Medidos sobre o surface-100 (#ffffff, o
+     fundo dos cards e do modal, onde as mensagens de erro aparecem) e sobre o
+     surface-0 (#f2f5fa), os dois piores casos:
+       danger  5.62:1 / 5.14:1
+       success 5.01:1 / 4.58:1 */
+  --danger-ink: #c62828;
+  --success-ink: #128043;
+  --focus-ring-color: #0d6fdd; /* brand-500: 4.43:1 sobre o surface-0 */
+  /* O ambar do tema escuro praticamente desaparece no fundo claro, entao aqui
+     ele vira ambar-terra. Medido nos quatro fundos em que a estrela aparece:
+       surface-100 (#ffffff, card)  6.15:1
+       surface-0   (#f2f5fa, pagina) 5.63:1
+       surface-50  (#e9eef7)         5.28:1
+       surface-200 (#dee6f2, borda)  4.89:1
+     O primeiro candidato (#9a6206) passava no branco (5.09:1) mas caia para
+     4.37:1 sobre o surface-50 — abaixo do minimo 4.5:1 da WCAG AA. Este tom
+     tem folga nos quatro. */
+  --star-ink: #8a5605;
 }
 
 html,
@@ -123,8 +175,51 @@ body {
 }
 
 @layer utilities {
+  /* O offset padrão é o fundo da página (surface-0). Num contêiner sobre
+     surface-100 (Modal, Card) a faixa do offset sai da cor errada — nesses
+     casos combine `focus-ring` com `ring-offset-surface-100`, que sobrescreve
+     só o offset. Ver `.modal-surface` abaixo, que já faz isso para tudo dentro
+     de um diálogo. */
   .focus-ring {
-    @apply outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0;
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0;
+  }
+
+  /* Aplicado no painel do Modal: tudo que receber foco lá dentro desenha o
+     offset sobre o fundo real do diálogo, não sobre o da página. */
+  .modal-surface :focus-visible {
+    --tw-ring-offset-color: var(--color-surface-100);
+  }
+}
+
+/* Quem pede menos movimento no sistema tem motivo (enxaqueca vestibular,
+   sensibilidade a movimento). Corta as animações em vez de reduzi-las, mas
+   mantém as transições de cor — elas não deslocam nada na tela. O shimmer do
+   skeleton é o caso mais incômodo: é infinito. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton::after {
+    animation: none;
+  }
+
+  /* As animações já eram cortadas acima, mas o DESLOCAMENTO continuava vindo
+     das transições de `transform`: a capa do destaque crescia 3% no hover, o
+     botão de play do player 5%, e a seta do formulário girava. Transição não é
+     animação — não era pega pela regra acima, e é exatamente o tipo de
+     movimento que incomoda quem pediu menos.
+     Só `transform` é zerado. As transições de COR seguem valendo (o `body`
+     depende delas para trocar de tema sem piscar) porque não deslocam nada. */
+  *,
+  *::before,
+  *::after {
+    transition-property: color, background-color, border-color, outline-color,
+      text-decoration-color, fill, stroke, opacity, box-shadow !important;
   }
 }
 
@@ -136,6 +231,22 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes landing-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.landing-marquee {
+  animation: landing-marquee 28s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-marquee {
+    animation: none;
   }
 }
 
@@ -162,4 +273,65 @@ body {
 
 :root[data-theme='light'] .skeleton::after {
   background: linear-gradient(90deg, transparent, rgb(0 0 0 / 0.04), transparent);
+}
+
+/* Em tela cheia o player deve PREENCHER a tela. O `aspect-video` do container
+   é correto no fluxo da página, mas num celular deitado (20:9) ele deixa
+   tarjas laterais enormes. O Tailwind v4 não tem variante `fullscreen:`, então
+   a regra vive aqui. */
+.player-shell:fullscreen {
+  aspect-ratio: auto;
+  height: 100%;
+  width: 100%;
+  border-radius: 0;
+}
+
+/* Slider de volume do player.
+   O <input type="range"> nativo é cinza-sistema e não aceita estilo pelas
+   classes do Tailwind: trilho e polegar só existem em pseudo-elementos, que
+   precisam ser escritos para WebKit e Firefox separadamente.
+   Cores fixas em branco (não tokens de tema) porque isto vive SEMPRE sobre o
+   vídeo, que é preto nos dois temas — seguir o tema claro deixaria o controle
+   invisível. */
+/* O fundo (trilho + parte preenchida) vem de um gradiente inline no elemento,
+   definido no VideoPlayer — é o único jeito de o "já preenchido" ficar igual
+   no Chrome e no Firefox. Os trilhos nativos ficam transparentes para deixar
+   esse gradiente aparecer. */
+.volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 9999px;
+  background-color: transparent;
+  background-repeat: no-repeat;
+}
+
+.volume-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.volume-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 12px;
+  width: 12px;
+  border-radius: 9999px;
+  background: #fff;
+  /* Centraliza o polegar no trilho: (altura do trilho - altura do polegar) / 2 */
+  margin-top: -4px;
+}
+
+.volume-slider::-moz-range-thumb {
+  height: 12px;
+  width: 12px;
+  border: none;
+  border-radius: 9999px;
+  background: #fff;
 }
