@@ -39,7 +39,7 @@ import { useToast } from '@/context/ToastContext'
 import { useAuth } from '@/context/AuthContext'
 import { toErrorMessage } from '@/api/client'
 import { categorySchema, type CategoryValues } from '@/lib/validation'
-import { formatCompact, formatRelativeDate } from '@/lib/format'
+import { formatRelativeDate } from '@/lib/format'
 import { STATUS_LABEL, type UiVideo } from '@/lib/video'
 import type { CategoryResponse, VideoStatus } from '@/api/types'
 
@@ -49,7 +49,8 @@ export function AdminPage() {
   const categories = useCategories()
   const feedbacks = useFeedbacks()
 
-  const totalViews = (videos.data ?? []).reduce((sum, video) => sum + (video.views ?? 0), 0)
+  // TEMP: total de visualizacoes desativado junto com o card da metrica.
+  // const totalViews = (videos.data ?? []).reduce((sum, video) => sum + (video.views ?? 0), 0)
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-16 pt-6 sm:px-6">
@@ -74,12 +75,14 @@ export function AdminPage() {
       <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <Metric label="Usuários" value={users.data?.length} icon={UsersIcon} loading={users.isLoading} />
         <Metric label="Vídeos" value={videos.data?.length} icon={Film} loading={videos.isLoading} />
-        <Metric
-          label="Visualizações"
-          value={videos.data ? formatCompact(totalViews) : undefined}
-          icon={Eye}
-          loading={videos.isLoading}
-        />
+        {/* TEMP: metrica de visualizacoes escondida a pedido do time.
+            Para voltar, reponha este card (e o totalViews acima):
+            <Metric
+              label="Visualizações"
+              value={videos.data ? formatCompact(totalViews) : undefined}
+              icon={Eye}
+              loading={videos.isLoading}
+            /> */}
         <Metric
           label="Categorias"
           value={categories.data?.length}
@@ -409,9 +412,10 @@ function VideoRow({ video }: { video: UiVideo }) {
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-surface-900">{video.tittle}</p>
+        {/* TEMP: contagem de views escondida a pedido do time — para voltar,
+            acrescente `· {formatCompact(video.views ?? 0)} views`. */}
         <p className="truncate text-xs text-surface-600">
-          {video.creatorName} · {STATUS_LABEL[video.status] ?? video.status} ·{' '}
-          {formatCompact(video.views ?? 0)} views
+          {video.creatorName} · {STATUS_LABEL[video.status] ?? video.status}
         </p>
       </div>
 
