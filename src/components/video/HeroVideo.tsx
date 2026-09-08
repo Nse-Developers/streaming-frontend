@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ImageOff, Play } from 'lucide-react'
 import type { UiVideo } from '@/lib/video'
-import { formatViews, formatRelativeDate } from '@/lib/format'
+import { formatRelativeDate } from '@/lib/format'
 
 const SHELL_CLASS = 'group relative block overflow-hidden rounded-2xl bg-surface-200'
 
@@ -79,8 +79,10 @@ function HeroBody({ video }: { video: UiVideo }) {
 
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-white/70 sm:text-sm">
           <span className="font-semibold text-white">{video.creatorName}</span>
-          <span aria-hidden="true">·</span>
-          <span className="tabular-nums">{formatViews(video.views)}</span>
+          {/* TEMP: contagem de visualizacoes escondida a pedido do time.
+              Para voltar, reponha o separador + o span abaixo:
+              <span aria-hidden="true">·</span>
+              <span className="tabular-nums">{formatViews(video.views)}</span> */}
           <span aria-hidden="true">·</span>
           <span>{formatRelativeDate(video.uploadDate)}</span>
         </div>
