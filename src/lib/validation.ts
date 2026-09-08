@@ -253,7 +253,7 @@ const MB = 1024 * 1024
 const GB = 1024 * MB
 
 /** Teto do arquivo de vídeo, espelhando o limite do backend. */
-export const MAX_VIDEO_BYTES = 1 * GB
+export const MAX_VIDEO_BYTES = 2.95 * GB
 
 /** Teto da thumbnail — o 413 da API vem acima disto.
  *
@@ -268,8 +268,13 @@ export const MAX_THUMB_BYTES = 5 * MB
  *  mensagem de erro e na dica de cada dropzone, então mexer no limite exigia
  *  lembrar de três lugares — e a interface passava a prometer um tamanho que a
  *  validação recusava. Agora só há um número para mudar. */
-const limitLabel = (bytes: number) =>
-  bytes >= GB ? `${bytes / GB} GB` : `${bytes / MB} MB`
+const limitLabel = (bytes: number) => {
+  const [value, unit] = bytes >= GB ? [bytes / GB, 'GB'] : [bytes / MB, 'MB']
+  // Vírgula decimal e sem zeros à direita: um teto de 2,95 GB imprimia
+  // "2.95 GB" com ponto, fora do padrão do resto da interface (ver
+  // formatViews/formatBytes), e um teto redondo não deve virar "1,00 GB".
+  return `${value.toFixed(2).replace(/\.?0+$/, '').replace('.', ',')} ${unit}`
+}
 
 export const MAX_VIDEO_LABEL = limitLabel(MAX_VIDEO_BYTES)
 export const MAX_THUMB_LABEL = limitLabel(MAX_THUMB_BYTES)
