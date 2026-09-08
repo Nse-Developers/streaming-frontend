@@ -253,7 +253,7 @@ const MB = 1024 * 1024
 const GB = 1024 * MB
 
 /** Teto do arquivo de vídeo, espelhando o limite do backend. */
-export const MAX_VIDEO_BYTES = 2.95 * GB
+export const MAX_VIDEO_BYTES = 1 * GB
 
 /** Teto da thumbnail — o 413 da API vem acima disto.
  *
