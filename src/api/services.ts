@@ -28,6 +28,7 @@ import type {
   UserRegisterRequest,
   UserResponse,
   UserUpdateRequest,
+  UserUpdateVerifyAccountRequest,
   VideoResponse,
   VideoConfirmStatus,
   VideoStatus,
@@ -148,6 +149,47 @@ export const authApi = {
   async updateUser(email: string, body: UserUpdateRequest) {
     const { data } = await http.put<UserResponse>(`/auth/users/${encodeURIComponent(email)}`, body)
     return data
+  },
+
+  /** PUT /auth/users/verify-account/{email} — concede ou remove o selo de
+   *  verificado.
+   *
+   *  Rota SEPARADA do update de perfil de propósito: o PUT /auth/users/{email}
+   *  aceita o resto do cadastro mas ignora a verificação (dito no Swagger), o
+   *  que impede alguém conceder o selo a si mesmo editando o próprio perfil.
+   *
+   *  Exclusivo de ADMIN, e o backend recusa o e-mail da PRÓPRIA conta
+   *  autenticada com 403. A tela esconde a ação nesse caso, mas quem decide é
+   *  o servidor — a UI é conveniência, não a barreira.
+   *
+   *  `isVerified` vira `isVerifyAccount` no corpo (nome real do DTO) e vai
+   *  sempre explícito: ausente ou `null`, o backend devolve 200 sem alterar
+   *  nada, e a tela leria isso como sucesso.
+   *
+   *  Os dois erros ganham texto próprio porque os fallbacks por código não
+   *  dizem o que fazer aqui: "Você não tem permissão para fazer isso" não
+   *  explica que o bloqueio é a própria conta, e "Não encontramos o que você
+   *  procura" não deixa claro que o alvo é o usuário, não a tela. */
+  async setUserVerified(email: string, isVerified: boolean) {
+    const body: UserUpdateVerifyAccountRequest = { isVerifyAccount: isVerified }
+    try {
+      const { data } = await http.put<UserResponse>(
+        `/auth/users/verify-account/${encodeURIComponent(email)}`,
+        body,
+      )
+      return data
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        throw new ApiError(
+          'Só um administrador altera a verificação, e ninguém pode alterar a da própria conta.',
+          403,
+        )
+      }
+      if (error instanceof ApiError && error.status === 404) {
+        throw new ApiError('Esta conta não existe mais.', 404)
+      }
+      throw error
+    }
   },
 
   async deleteUser(email: string) {

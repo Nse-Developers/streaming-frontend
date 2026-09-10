@@ -160,7 +160,8 @@ export function VideoPage() {
                 <UserLink
                   userId={video.userId}
                   name={video.creatorName}
-                  className="block truncate font-display text-sm font-semibold text-surface-900"
+                  badgeSize="md"
+                  className="font-display text-sm font-semibold text-surface-900"
                 />
                 <p className="text-xs text-surface-600">
                   Criador

@@ -22,6 +22,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { VideoCardSkeleton } from '@/components/ui/Skeleton'
 import { Modal } from '@/components/ui/Modal'
 import { VideoCard } from '@/components/video/VideoCard'
+import { VerifiedBadge } from '@/components/user/VerifiedBadge'
 import { useAuth, type AuthUser } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { useDeleteVideo, useMyVideos, useUpdateVideoStatus } from '@/hooks/useVideos'
@@ -52,8 +53,11 @@ export function ProfilePage() {
       <header className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
         <Avatar name={user.name} className="h-16 w-16 text-xl sm:h-20 sm:w-20 sm:text-2xl" />
         <div className="min-w-0 flex-1">
-          <h1 className="font-display text-2xl font-extrabold tracking-tight text-surface-900 sm:text-3xl">
-            {user.name}
+          {/* `flex-wrap` + `min-w-0`: num nome longo o selo desce para a
+              linha seguinte em vez de forçar a largura do cabeçalho. */}
+          <h1 className="flex min-w-0 flex-wrap items-center gap-x-2 font-display text-2xl font-extrabold tracking-tight text-surface-900 sm:text-3xl">
+            <span className="min-w-0 break-words">{user.name}</span>
+            <VerifiedBadge verified={user.isVerified} size="lg" />
           </h1>
           <p className="mt-0.5 truncate text-sm text-surface-600">{user.email}</p>
           <div className="mt-2.5 flex flex-wrap gap-1.5">

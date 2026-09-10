@@ -74,6 +74,17 @@ export type UserUpdateRequest = Partial<
   Omit<UserRegisterRequest, 'email' | 'password' | 'userTypeAccount'>
 >
 
+/** PUT /auth/users/verify-account/{email} — concede ou remove o selo.
+ *
+ *  O nome do campo NÃO é `userIsVerified` (o da resposta): aqui o backend
+ *  espera `isVerifyAccount`. Escrever o nome da resposta faz o campo chegar
+ *  ausente, e o servidor responde 200 **sem mudar nada** — a tela mostraria
+ *  sucesso sobre um estado que não existe no banco. Por isso o valor vai
+ *  sempre explícito, nunca omitido para "manter como está". */
+export interface UserUpdateVerifyAccountRequest {
+  isVerifyAccount: boolean
+}
+
 /** GET /auth/me, GET /auth/users, POST /auth/register.
  *
  *  Os papéis vêm no UserResponse para que /auth/me sozinho baste para saber o
@@ -94,6 +105,15 @@ export interface UserResponse {
   acceptTerms: boolean
   typeAccount: UserTypeAccount
   userAuth: UserAuth
+  /** Selo de verificado da conta. Nasce `false` no cadastro e só muda por
+   *  PUT /auth/users/verify-account/{email}, que é exclusivo de ADMIN — o
+   *  PUT /auth/users/{email} (perfil) IGNORA este campo, dito no Swagger.
+   *
+   *  O campo já chega também em outras rotas relevantes hoje: perfil público,
+   *  vídeo e comentários. Mantém `?` para compatibilidade com backends mais
+   *  antigos, mas a regra correta na UI é ler o valor quando a resposta o
+   *  envia e tratar `undefined` como "não sei", nunca como `false`. */
+  userIsVerified?: boolean
   bio: string
   profilePhoto: string
   state: string
@@ -117,13 +137,20 @@ export interface UserResponse {
  *
  *  ATENÇÃO ao nome do id: aqui é `userId`, enquanto em UserResponse (/auth/me)
  *  o mesmo dado se chama `id`. São records diferentes no backend — não unificar
- *  os dois tipos por causa disso. */
+ *  os dois tipos por causa disso.
+ *
+ *  O campo `userIsVerified` já chega nesta rota em 2026-09-10; continua opcional
+ *  para manter compatibilidade com versões anteriores do backend. */
 export interface PublicUserResponse {
   /** Id do próprio usuário retornado (confirma quem é o dono do perfil). */
   userId: number
   name: string
   surname: string
   typeAccount: UserTypeAccount
+  /** Selo de verificado do perfil público. A rota já entrega o valor em
+   *  2026-09-10, então a UI pode exibir imediatamente sem depender do cache de
+   *  admin. Mantém `?` para compatibilidade com versões antigas do backend. */
+  userIsVerified?: boolean
   bio: string
   state: string
   country: string
@@ -165,6 +192,8 @@ export interface VideoResponse {
    *  Cuidado para não confundir com `videId`, que é o id do vídeo. Os dois são
    *  números e ficam lado a lado; trocar um pelo outro leva ao perfil errado. */
   userId?: number
+  /** Selo de verificado do criador, já entregue por GET /video em 2026-09-10. */
+  userIsVerified?: boolean
   language: string
   uploadDate: string
   views: number
@@ -266,6 +295,8 @@ export interface CommentResponse {
    *  o nome ao perfil público. Devolvido desde 2026-08-16; opcional pela mesma
    *  razão de `VideoResponse.userId`. */
   userId?: number
+  /** Selo de verificado do autor, entregue junto com o comentário em 2026-09-10. */
+  userIsVerified?: boolean
   dataComment: string
   likes: number
 }

@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ImageOff, Play } from 'lucide-react'
+import { VerifiedBadge } from '@/components/user/VerifiedBadge'
+import { useVerifiedById } from '@/hooks/useUsers'
 import type { UiVideo } from '@/lib/video'
 import { formatRelativeDate } from '@/lib/format'
 
@@ -22,6 +24,8 @@ export function HeroVideo({ video }: { video: UiVideo }) {
 }
 
 function HeroBody({ video }: { video: UiVideo }) {
+  const creatorIsVerified = video.userIsVerified ?? useVerifiedById(video.userId)
+
   return (
     <>
       {/* max-h impede o destaque de empurrar o feed para fora da primeira
@@ -78,7 +82,13 @@ function HeroBody({ video }: { video: UiVideo }) {
         )}
 
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-white/70 sm:text-sm">
-          <span className="font-semibold text-white">{video.creatorName}</span>
+          {/* `tone="media"`: aqui o fundo é a capa do vídeo sob um gradiente
+              preto nos DOIS temas, e o accent-ink do tema claro (verde-escuro)
+              desapareceria nele. Branco, como o nome ao lado. */}
+          <span className="inline-flex items-center gap-1 font-semibold text-white">
+            {video.creatorName}
+            <VerifiedBadge verified={creatorIsVerified} size="sm" tone="media" />
+          </span>
           {/* TEMP: contagem de visualizacoes escondida a pedido do time.
               Para voltar, reponha o separador + o span abaixo:
               <span aria-hidden="true">·</span>

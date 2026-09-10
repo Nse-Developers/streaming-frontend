@@ -4,6 +4,7 @@ import { Search, Moon, Sun, LogOut, User, ShieldCheck, X } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from '@/context/ThemeContext'
 import { Avatar } from '@/components/ui/Avatar'
+import { VerifiedBadge } from '@/components/user/VerifiedBadge'
 import { Logo } from './Logo'
 
 const ACCOUNT_LABEL = { CREATORS: 'Criador', VIEWERS: 'Espectador' } as const
@@ -142,8 +143,9 @@ export function Header({
                       <div className="flex items-center gap-3 p-3">
                         <Avatar name={user.name} className="h-10 w-10 text-sm" />
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-surface-900">
-                            {user.name}
+                          <p className="flex items-center gap-1 text-sm font-semibold text-surface-900">
+                            <span className="truncate">{user.name}</span>
+                            <VerifiedBadge verified={user.isVerified} size="sm" />
                           </p>
                           <p className="truncate text-xs text-surface-600">{user.email}</p>
                         </div>

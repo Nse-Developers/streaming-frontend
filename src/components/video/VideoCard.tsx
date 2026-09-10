@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ImageOff, Lock, FileEdit, Loader } from 'lucide-react'
 import { Avatar } from '@/components/ui/Avatar'
+import { VerifiedBadge } from '@/components/user/VerifiedBadge'
+import { useVerifiedById } from '@/hooks/useUsers'
 import type { UiVideo } from '@/lib/video'
 import { formatRelativeDate } from '@/lib/format'
 import { cn } from '@/lib/cn'
@@ -94,9 +96,16 @@ function CardShell({
 /** Metadados numa linha só: canal · views · quando. Mais denso que empilhar
  *  três parágrafos, e é como o olho já está treinado a ler num feed de vídeo. */
 function Meta({ video }: { video: UiVideo }) {
+  const creatorIsVerified = video.userIsVerified ?? useVerifiedById(video.userId)
+
   return (
     <p className="mt-0.5 text-[13px] leading-snug text-surface-600">
-      <span className="block truncate">{video.creatorName}</span>
+      {/* `flex` no lugar de `block truncate`: o selo precisa ficar fora do nó
+          que trunca, senão um nome de canal longo o comeria primeiro. */}
+      <span className="flex items-center gap-1">
+        <span className="min-w-0 truncate">{video.creatorName}</span>
+        <VerifiedBadge verified={creatorIsVerified} size="sm" />
+      </span>
       {/* `block truncate` também na segunda linha: como <span> em fluxo, "1,4
           mil visualizações · há 2 meses" quebrava palavra a palavra quando o
           card ficava estreito. Truncar mantém a linha única e legível.
