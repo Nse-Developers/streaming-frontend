@@ -86,6 +86,8 @@ export const authApi = {
       clearSessionToken()
       clearCsrfToken()
     }
+    // O erro sobe de propósito: esta camada relata o que a API respondeu. Quem
+    // decide que "sair não pode falhar" é o AuthContext, que trata o erro lá.
   },
 
   async register(body: UserRegisterRequest) {

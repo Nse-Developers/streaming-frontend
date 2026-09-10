@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ImageOff, Lock, FileEdit, Loader } from 'lucide-react'
 import { Avatar } from '@/components/ui/Avatar'
 import type { UiVideo } from '@/lib/video'
-import { formatViews, formatRelativeDate } from '@/lib/format'
+import { formatRelativeDate } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
 /** Selo de status para vídeos que não estão publicados (usado em "Meus vídeos"). */
@@ -99,9 +99,11 @@ function Meta({ video }: { video: UiVideo }) {
       <span className="block truncate">{video.creatorName}</span>
       {/* `block truncate` também na segunda linha: como <span> em fluxo, "1,4
           mil visualizações · há 2 meses" quebrava palavra a palavra quando o
-          card ficava estreito. Truncar mantém a linha única e legível. */}
+          card ficava estreito. Truncar mantém a linha única e legível.
+          TEMP: contagem de visualizacoes escondida a pedido do time — para
+          voltar, use `{formatViews(video.views)} · {formatRelativeDate(...)}`. */}
       <span className="block truncate tabular-nums">
-        {formatViews(video.views)} · {formatRelativeDate(video.uploadDate)}
+        {formatRelativeDate(video.uploadDate)}
       </span>
     </p>
   )

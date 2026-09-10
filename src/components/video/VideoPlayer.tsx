@@ -202,16 +202,30 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
         // quem tabulava até "Tela cheia" e parava 3s ficava com o foco num
         // botão invisível (opacity-0), e o Tab seguia por elementos que ninguém
         // vê. Enquanto o foco estiver dentro do player, os controles ficam.
-        if (containerRef.current?.contains(document.activeElement)) return
+        //
+        // `:focus-visible`, e não `contains(activeElement)`: TOCAR num botão
+        // também deixa o foco nele, então a versão anterior travava os
+        // controles para sempre no celular. O caso real era entrar em tela
+        // cheia pelo botão — o foco ficava em "Sair da tela cheia", dentro do
+        // player, e o auto-hide nunca mais rodava com o vídeo tocando.
+        // `:focus-visible` é justamente o sinal do navegador para "este foco
+        // veio do teclado", que é o único caso que esta guarda quer proteger.
+        const focused = containerRef.current?.querySelector(':focus-visible')
+        if (focused) return
         setShowControls(false)
       }, HIDE_DELAY_MS)
     }
   }, [])
 
   // Enquanto pausado os controles ficam fixos; ao dar play, começa a contagem.
+  //
+  // `isFullscreen` também dispara: entrar em tela cheia não muda `isPlaying`,
+  // então sem isto a contagem não era reiniciada no exato momento em que o
+  // usuário mais quer a tela limpa. O toque no botão foi a última interação —
+  // daqui a 3s os controles saem da frente.
   useEffect(() => {
     revealControls()
-  }, [isPlaying, revealControls])
+  }, [isPlaying, isFullscreen, revealControls])
 
   // Limpa o timer ao desmontar: sem isto, um setState dispararia num componente
   // que já saiu da tela (o usuário navegou para outro vídeo).
@@ -441,7 +455,14 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
       className={cn(
         // `player-shell` traz a regra de tela cheia (ver index.css): sem ela o
         // aspect-video fixo deixava tarjas laterais num celular deitado (20:9).
-        'player-shell group relative aspect-video w-full overflow-hidden rounded-xl bg-black',
+        // `max-h-[78svh]` + `mx-auto`: o aspect-video sozinho deixava o player
+        // com 116-121% da ALTURA da tela num celular deitado (medido: 370px de
+        // player em 320px de tela), entao o video nascia maior que o viewport e
+        // empurrava titulo e controles para fora. Com o teto, a altura manda e
+        // a largura acompanha a proporcao, centrada.
+        // `svh` e nao `vh`: no celular o `vh` conta a tela com a barra de
+        // endereco recolhida, o mesmo motivo pelo qual o AuthShell usa `dvh`.
+        'player-shell group relative mx-auto aspect-video max-h-[78svh] w-full overflow-hidden rounded-xl bg-black',
         // Some com o cursor junto dos controles: em tela cheia, uma seta parada
         // no meio do filme incomoda tanto quanto a barra.
         !showControls && 'cursor-none',
@@ -536,7 +557,12 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
 
       <div
         className={cn(
-          'absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-2.5 pb-2 pt-10 transition-opacity duration-200 sm:px-3 sm:pb-2.5',
+          // `pt-10` (40px de gradiente) somado ao resto dava 157px de barra num
+          // player que no celular tem 162px: 87% do quadro coberto pelo
+          // gradiente, o que fazia o player parecer "todo controle e nenhum
+          // video". Com `pt-3` no toque a barra fecha em 92px (57%); do `sm`
+          // para cima nada muda, onde o player e alto o bastante.
+          'absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-2.5 pb-2 pt-3 transition-opacity duration-200 sm:px-3 sm:pb-2.5 sm:pt-10',
           // A CAIXA da barra é inerte; só os controles de verdade (progresso e
           // fileira de botões) recebem toque, via `pointer-events-auto`.
           //
@@ -552,16 +578,6 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
           controlsVisible ? 'opacity-100' : 'opacity-0',
         )}
       >
-        {/* No toque o relógio sai da fileira de botões e ganha uma linha só
-            sua. Com os dois botões de salto, a fileira passa a ter cinco alvos
-            de 44px (o mínimo de toque): 220px + folgas, contra os ~268px que
-            sobram dentro do player a 320px de tela. O relógio de um vídeo de
-            1h ("1:02:33 / 1:45:00") come outros ~100px e empurrava "tela
-            cheia" para fora do recorte. Aqui em cima o espaço sobra. */}
-        <div className="mb-0.5 flex justify-end sm:hidden">
-          <TimeReadout current={currentTime} total={duration} />
-        </div>
-
         <div
           // A faixa clicável media 16px de altura. O trilho VISÍVEL tem 4px e
           // fica centrado nela, então a área extra já era só folga de clique —
@@ -571,7 +587,22 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
           // tamanho (é o filho absoluto, centrado por `top-1/2`), então no
           // ponteiro fino a aparência segue idêntica.
           className={cn(
-            'group/bar relative mb-1 h-4 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 max-sm:h-11',
+            // No toque a faixa cai de 44px para 24px. Duas medicoes levaram a
+            // este numero, as duas com elementFromPoint varrendo a coluna
+            // central do player:
+            //
+            //   1. Margem negativa para recolher a folga invisivel sobrepunha a
+            //      faixa aos vizinhos: os 14px de cima de CADA botao passavam a
+            //      disparar seek, e tocar o topo de "play" pulava o video.
+            //   2. Com 32px, num player de 162px (celular pequeno na coluna de
+            //      conteudo) a faixa cobria justamente o MEIO do quadro, e o
+            //      toque no centro do video dava seek para 30s em vez de tocar
+            //      — o gesto mais basico do player.
+            //
+            // 24px continua acima da folga original de 16px do ponteiro fino, e
+            // o trilho atravessa a largura inteira: errar exige mirar na faixa
+            // estreita entre o video e a fileira de botoes.
+            'group/bar relative mb-1 h-4 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 max-sm:h-6',
             // Devolve o toque que o `pointer-events-none` do pai tirou — mas
             // só enquanto a barra está visível, senão os controles seguiriam
             // clicáveis invisíveis por cima do vídeo.
@@ -715,13 +746,21 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
             />
           </div>
 
-          {/* No ponteiro fino o relógio continua na fileira: lá a largura
-              sobra, e o olho já o procura ao lado dos controles. A versão de
-              toque está acima da barra de progresso. */}
+          {/* O relógio fica na fileira, e não em uma linha própria no toque:
+              aquela linha custava 17px de altura num player que no celular tem
+              162px, e com ela a barra empurrava o trilho de progresso até o
+              MEIO do quadro — o toque no centro do vídeo dava seek em vez de
+              pausar, o gesto mais básico do player.
+              `hidden min-[400px]:block` porque o espaço horizontal também é
+              apertado: nos 268px de fileira que sobram num player de 288px, o
+              relógio comprimia os três primeiros botões para 35px, abaixo do
+              alvo mínimo de 44px. Abaixo de 400px de tela ele sai e a barra de
+              progresso já indica a posição; o tempo exato continua na tela
+              cheia, onde a largura sobra. */}
           <TimeReadout
             current={currentTime}
             total={duration}
-            className="ml-1 hidden sm:block"
+            className="ml-1 hidden min-w-0 shrink truncate min-[400px]:block"
           />
 
           <div className="ml-auto">
@@ -747,9 +786,19 @@ export function VideoPlayer({ src, poster, title, onRetry }: VideoPlayerProps) {
           type="button"
           onClick={togglePlay}
           aria-label="Reproduzir"
-          className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-brand-500 text-white shadow-lg transition-transform duration-200 hover:scale-105 focus-ring sm:h-16 sm:w-16"
+          // No celular o circulo cai para 48px e sobe para o meio do espaco
+          // LIVRE (`top-[38%]`), nao o meio geometrico do player: a barra de
+          // controles cresce a partir de baixo, entao com `top-1/2` e 56px o
+          // circulo encostava no trilho de progresso num player de 162px
+          // (celular pequeno na coluna de conteudo).
+          // Porcentagem e nao um `bottom` em pixels: a altura da barra muda com
+          // o conteudo (o relogio entra a partir de 400px), e um numero fixo
+          // aqui ficaria defasado na primeira mudanca da barra.
+          // Do `sm` para cima o player e alto o bastante e nada muda.
+          className="absolute left-1/2 top-[38%] flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-brand-500 text-white shadow-lg transition-transform duration-200 hover:scale-105 focus-ring sm:top-1/2 sm:h-16 sm:w-16"
         >
-          <Play size={26} fill="currentColor" className="ml-1" />
+          <Play size={22} fill="currentColor" className="ml-0.5 sm:hidden" />
+          <Play size={26} fill="currentColor" className="ml-1 hidden sm:block" />
         </button>
       )}
     </div>

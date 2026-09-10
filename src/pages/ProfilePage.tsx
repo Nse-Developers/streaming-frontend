@@ -396,6 +396,7 @@ function ProfileForm({ user }: { user: AuthUser }) {
           />
           <Input
             label="Sobrenome"
+            optional
             autoComplete="family-name"
             error={errors.surname?.message}
             {...register('surname')}

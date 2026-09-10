@@ -186,6 +186,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await authApi.logout()
+    } catch {
+      // Sair NÃO pode falhar. `finally` limpava o estado mas relançava o erro,
+      // que subia como "Uncaught (in promise)" e chegava à interface — o
+      // usuário via "Você não tem permissão para fazer isso" ao clicar em
+      // sair, num fluxo que do ponto de vista dele deu certo.
+      //
+      // Avisar o servidor é o melhor esforço: o que efetiva a saída é
+      // descartar a credencial local, e isso acontece abaixo de todo modo.
+      // Um 403 aqui só significa que a sessão já não valia no servidor.
     } finally {
       // Limpa o estado local mesmo se a chamada falhar (ex.: já sem sessão) —
       // o objetivo é o usuário sair da área logada. authApi.logout() ja
