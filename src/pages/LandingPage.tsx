@@ -104,11 +104,27 @@ export function LandingPage() {
               <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-surface-300 bg-surface-100 px-3.5 py-1.5 text-xs font-medium text-surface-800"><span className="h-2 w-2 animate-pulse rounded-full bg-accent-ink" />Sem algoritmo de aparência</span>
               <h1 className="max-w-3xl font-display text-4xl font-extrabold leading-[1.05] tracking-tight text-surface-900 sm:text-5xl lg:text-[3.8rem]">Cansado de editar quem você é pra caber num feed?</h1>
               <p className="mt-6 max-w-xl text-base leading-relaxed text-surface-600 sm:text-lg">O Byou é o streaming aberto onde o mesmo criador publica ensaio, vlog cru, live técnica ou texto longo. Sem performar para métricas vazias.</p>
+              {/* Esta página é alcançável com sessão (rota /sobre), então nenhum
+                  convite de cadastro pode sobrar aqui: "Criar conta grátis" viraria
+                  um clique que o RedirectIfAuthenticated devolve para /home sem
+                  explicar nada. Para quem já entrou fica só o catálogo — promovido
+                  ao botão primário, porque manter os dois deixaria o hero com dois
+                  botões apontando para o mesmo lugar. */}
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link to="/register" className="inline-flex h-12 items-center gap-2 rounded-md bg-brand-500 px-6 text-sm font-bold text-white shadow-[0_8px_28px_rgb(13_111_221_/_0.28)] transition-colors hover:bg-brand-600 focus-ring">Criar conta grátis <ArrowRight size={17} /></Link>
-                <Link to={APP_HOME} className="inline-flex h-12 items-center gap-2 rounded-md border border-surface-300 bg-surface-100 px-5 text-sm font-semibold text-surface-800 hover:bg-surface-200 focus-ring"><Play size={16} className="text-accent-ink" />Ver os vídeos</Link>
+                {isAuthenticated ? (
+                  <Link to={APP_HOME} className="inline-flex h-12 items-center gap-2 rounded-md bg-brand-500 px-6 text-sm font-bold text-white shadow-[0_8px_28px_rgb(13_111_221_/_0.28)] transition-colors hover:bg-brand-600 focus-ring">Ir para os vídeos <ArrowRight size={17} /></Link>
+                ) : (
+                  <>
+                    <Link to="/register" className="inline-flex h-12 items-center gap-2 rounded-md bg-brand-500 px-6 text-sm font-bold text-white shadow-[0_8px_28px_rgb(13_111_221_/_0.28)] transition-colors hover:bg-brand-600 focus-ring">Criar conta grátis <ArrowRight size={17} /></Link>
+                    <Link to={APP_HOME} className="inline-flex h-12 items-center gap-2 rounded-md border border-surface-300 bg-surface-100 px-5 text-sm font-semibold text-surface-800 hover:bg-surface-200 focus-ring"><Play size={16} className="text-accent-ink" />Ver os vídeos</Link>
+                  </>
+                )}
               </div>
-              <p className="mt-4 text-xs text-surface-600">Gratuito para assistir e publicar · Escolha entre <strong className="text-surface-800">Espectador</strong> ou <strong className="text-surface-800">Criador</strong></p>
+              {/* Fala em escolher entre Espectador e Criador: é a legenda do botão
+                  de cadastro, e não sobrevive a ele. */}
+              {!isAuthenticated && (
+                <p className="mt-4 text-xs text-surface-600">Gratuito para assistir e publicar · Escolha entre <strong className="text-surface-800">Espectador</strong> ou <strong className="text-surface-800">Criador</strong></p>
+              )}
             </div>
             <div className="lg:col-span-6">
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
@@ -143,10 +159,10 @@ export function LandingPage() {
 
         <section id="faq" className="mx-auto max-w-3xl px-4 py-16 sm:px-6 md:py-24"><SectionHeading title="Perguntas frequentes" description="Tudo o que você precisa saber sobre o Byou, privacidade e publicação." />{faqs.map(([question, answer], index) => <div key={question} className="border-b border-surface-300"><button type="button" onClick={() => setOpenFaq(openFaq === index ? null : index)} aria-expanded={openFaq === index} className="flex w-full items-center justify-between gap-4 py-5 text-left font-display text-sm font-bold text-surface-900 focus-ring sm:text-base"><span>{question}</span><ChevronDown size={18} className={`shrink-0 text-surface-600 transition-transform ${openFaq === index ? 'rotate-180' : ''}`} /></button>{openFaq === index && <p className="pb-5 text-sm leading-relaxed text-surface-600">{answer}</p>}</div>)}</section>
 
-        <section className="border-t border-surface-300 bg-surface-50 px-4 py-20 text-center sm:py-28"><span className="text-xs font-semibold uppercase tracking-wider text-accent-ink">O streaming dos criadores reais</span><h2 className="mx-auto mt-5 max-w-3xl font-display text-3xl font-black leading-tight text-surface-900 sm:text-5xl">Pare de editar quem você é. Comece a publicar.</h2><p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-surface-600 sm:text-base">Junte-se a criadores e espectadores que escolheram a autenticidade.</p><Link to="/register" className="mt-8 inline-flex h-12 items-center gap-2 rounded-md bg-brand-500 px-7 text-sm font-bold text-white shadow-[0_8px_28px_rgb(13_111_221_/_0.28)] hover:bg-brand-600 focus-ring">Criar minha conta grátis <ArrowRight size={17} /></Link><p className="mt-5 text-xs text-surface-600">Sem anúncios forçados · Sem venda de dados pessoais · Moderação humana</p></section>
+        <section className="border-t border-surface-300 bg-surface-50 px-4 py-20 text-center sm:py-28"><span className="text-xs font-semibold uppercase tracking-wider text-accent-ink">O streaming dos criadores reais</span><h2 className="mx-auto mt-5 max-w-3xl font-display text-3xl font-black leading-tight text-surface-900 sm:text-5xl">Pare de editar quem você é. Comece a publicar.</h2><p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-surface-600 sm:text-base">Junte-se a criadores e espectadores que escolheram a autenticidade.</p>{isAuthenticated ? (<Link to={APP_HOME} className="mt-8 inline-flex h-12 items-center gap-2 rounded-md bg-brand-500 px-7 text-sm font-bold text-white shadow-[0_8px_28px_rgb(13_111_221_/_0.28)] hover:bg-brand-600 focus-ring">Ir para os vídeos <ArrowRight size={17} /></Link>) : (<Link to="/register" className="mt-8 inline-flex h-12 items-center gap-2 rounded-md bg-brand-500 px-7 text-sm font-bold text-white shadow-[0_8px_28px_rgb(13_111_221_/_0.28)] hover:bg-brand-600 focus-ring">Criar minha conta grátis <ArrowRight size={17} /></Link>)}<p className="mt-5 text-xs text-surface-600">Sem anúncios forçados · Sem venda de dados pessoais · Moderação humana</p></section>
       </main>
 
-      <footer className="border-t border-surface-300 bg-surface-0 py-10"><div className="mx-auto flex max-w-[1280px] flex-col gap-6 px-4 text-sm text-surface-600 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8"><div><Logo className="text-lg" /><p className="mt-3 max-w-sm text-xs leading-relaxed">Streaming aberto sem julgamento. Espaço para criadores reais e audiências genuínas.</p></div><div className="flex flex-wrap gap-x-5 gap-y-2 text-xs"><Link to={APP_HOME} className="hover:text-surface-900">Explorar</Link><a href="#faq" className="hover:text-surface-900">FAQ</a><Link to="/login" className="hover:text-surface-900">Entrar</Link><a href="mailto:contato@byou.website" className="hover:text-surface-900">Contato</a></div></div></footer>
+      <footer className="border-t border-surface-300 bg-surface-0 py-10"><div className="mx-auto flex max-w-[1280px] flex-col gap-6 px-4 text-sm text-surface-600 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8"><div><Logo className="text-lg" /><p className="mt-3 max-w-sm text-xs leading-relaxed">Streaming aberto sem julgamento. Espaço para criadores reais e audiências genuínas.</p></div><div className="flex flex-wrap gap-x-5 gap-y-2 text-xs"><Link to={APP_HOME} className="hover:text-surface-900">Explorar</Link><a href="#faq" className="hover:text-surface-900">FAQ</a>{!isAuthenticated && <Link to="/login" className="hover:text-surface-900">Entrar</Link>}<a href="mailto:contato@byou.website" className="hover:text-surface-900">Contato</a></div></div></footer>
     </div>
   )
 }
