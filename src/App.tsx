@@ -62,6 +62,17 @@ export default function App() {
     <Routes>
       {/* Raiz: landing para visitante, catálogo para quem já tem sessão. */}
       <Route path="/" element={<LandingOrHome landing={<LandingPage />} />} />
+
+      {/* Mesma landing, mas SEM o guard da raiz: é o endereço por onde quem já
+          tem sessão consegue revê-la. A própria LandingPage já previa esse
+          visitante — o header dela troca "Entrar/Criar conta" por "Ir para os
+          vídeos" quando há sessão —, mas o redirect da raiz disparava antes da
+          página renderizar e esse ramo nunca era alcançado.
+
+          Rota própria em vez de afrouxar a raiz: quem abre o app todos os dias
+          continua caindo direto no catálogo, e a landing ganha um endereço
+          estável para divulgar e favoritar. */}
+      <Route path="/sobre" element={<LandingPage />} />
       <Route
         path="/login"
         element={
