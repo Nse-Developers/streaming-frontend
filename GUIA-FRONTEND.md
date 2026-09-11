@@ -42,7 +42,7 @@ Tudo que importa vive em [src/](src/). Traduzindo para termos de backend:
 | ↳ [ui/](src/components/ui/) | Peças genéricas: botão, input, modal, alerta | — |
 | ↳ [layout/](src/components/layout/) | Cabeçalho, menus, moldura das telas | — |
 | ↳ [video/](src/components/video/) | Card, player, comentários, destaque | — |
-| ↳ [user/](src/components/user/) | Nome clicável, botão seguir, contador | — |
+| ↳ [user/](src/components/user/) | Nome clicável, selo de verificado, botão seguir, contador | — |
 | ↳ [auth/](src/components/auth/) | Guards de rota e moldura de login/cadastro | Filtro de segurança |
 | [src/api/](src/api/) | Chamadas HTTP para a sua API | Client / Feign |
 | [src/hooks/](src/hooks/) | Busca e cacheia dados da API para as telas | Service |
@@ -376,6 +376,35 @@ Dois detalhes que economizam tempo:
   ("the user cannot follow themselves"). O estado "Seguindo" vem do servidor
   (`GET /follow/users/{id}/following`), não do localStorage — por isso está
   certo já no primeiro render e sobrevive a trocar de dispositivo.
+
+---
+
+**Selo de verificado** — o `✓` ao lado do nome:
+
+| Peça | Arquivo |
+|---|---|
+| O selo em si (cor, tamanho, animação) | [src/components/user/VerifiedBadge.tsx](src/components/user/VerifiedBadge.tsx) |
+| Selo ao lado do nome no vídeo e nos comentários | [src/components/user/UserLink.tsx](src/components/user/UserLink.tsx) |
+| Quem está verificado (a regra de resolução) | [src/hooks/useUsers.ts](src/hooks/useUsers.ts) — `useVerifiedById` |
+| Conceder / remover (só ADMIN) | [src/pages/AdminPage.tsx](src/pages/AdminPage.tsx) — seção "Verificação" |
+| Rota HTTP | [src/api/services.ts](src/api/services.ts) — `authApi.setUserVerified` |
+
+Três coisas para saber antes de mexer:
+
+- **O selo só aparece quando o backend diz `userIsVerified: true`.** `false` e
+  "não sei" desenham nada — nunca existe marca de "não verificado". Um selo
+  mostrado por engano é pior que um selo ausente: ele é justamente a informação
+  que o usuário deveria poder confiar.
+- **Hoje o campo `userIsVerified` vem em UMA resposta só:** `UserResponse`
+  (`/auth/me`, `/auth/users`). O vídeo (`GET /video`), o comentário e o perfil
+  público (`GET /auth/user/{id}`) **não** trazem o campo. Consequência prática:
+  um usuário comum vê o selo apenas no próprio nome; um ADMIN vê no de todos,
+  porque a lista de usuários já está carregada. Isso é limite do backend, não
+  do front — quando as três rotas passarem a devolver o campo, o selo aparece
+  para todo mundo trocando `useVerifiedById` por `resposta.userIsVerified` em
+  cada tela.
+- **Um ADMIN não altera a própria verificação.** O botão fica desabilitado com
+  o motivo no `title`, e o backend responde 403 se alguém insistir por fora.
 
 ---
 

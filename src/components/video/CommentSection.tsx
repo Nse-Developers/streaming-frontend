@@ -187,6 +187,7 @@ export function CommentSection({ videoId }: { videoId: number }) {
                         userId={comment.userId}
                         name={authorName}
                         className="font-medium text-surface-900"
+                        verified={comment.userIsVerified}
                       />
                     )}
                     <span>{formatRelativeDate(comment.dataComment) || 'agora'}</span>

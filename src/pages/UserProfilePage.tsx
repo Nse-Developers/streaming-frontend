@@ -18,7 +18,8 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { VideoCard } from '@/components/video/VideoCard'
 import { FollowButton } from '@/components/user/FollowButton'
 import { FollowerCount } from '@/components/user/FollowerCount'
-import { usePublicUser } from '@/hooks/useUsers'
+import { VerifiedBadge } from '@/components/user/VerifiedBadge'
+import { usePublicUser, useVerifiedById } from '@/hooks/useUsers'
 import { useVideos } from '@/hooks/useVideos'
 import { useAuth } from '@/context/AuthContext'
 import { toErrorMessage } from '@/api/client'
@@ -26,6 +27,7 @@ import { safeExternalUrl } from '@/lib/validation'
 import { formatLongDateBR } from '@/lib/format'
 import type { PublicUserResponse } from '@/api/types'
 import { publicVideos, type UiVideo } from '@/lib/video'
+import { APP_HOME } from '@/lib/nav'
 
 const ACCOUNT_LABEL = { CREATORS: 'Criador', VIEWERS: 'Espectador' } as const
 
@@ -54,7 +56,7 @@ export function UserProfilePage() {
           title="Endereço inválido"
           description="O identificador do perfil não é um número válido."
           action={
-            <Link to="/">
+            <Link to={APP_HOME}>
               <Button variant="secondary">Voltar ao início</Button>
             </Link>
           }
@@ -106,9 +108,7 @@ export function UserProfilePage() {
         <Avatar name={fullName} className="h-16 w-16 text-xl sm:h-20 sm:w-20 sm:text-2xl" />
 
         <div className="min-w-0 flex-1">
-          <h1 className="break-words font-display text-2xl font-extrabold tracking-tight text-surface-900 sm:text-3xl">
-            {fullName}
-          </h1>
+          <ProfileName userId={profileId} fullName={fullName} verified={user.userIsVerified} />
 
           <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
             <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/12 px-2.5 py-1 text-[11px] font-semibold text-brand-link">
@@ -162,6 +162,27 @@ export function UserProfilePage() {
   )
 }
 
+/** Nome do dono do perfil, com o selo de verificado ao lado.
+ *
+ *  Componente próprio, e não JSX solto no cabeçalho, por causa da ORDEM DOS
+ *  HOOKS: `profileId` só existe depois dos early returns de carregamento e
+ *  erro, e chamar `useVerifiedById` ali seria uma chamada condicional. Aqui o
+ *  hook roda sempre como fallback e recebe o valor explícito da API quando ele
+ *  chega na resposta. */
+function ProfileName({ userId, fullName, verified }: { userId: number; fullName: string; verified?: boolean }) {
+  const isVerified = verified ?? useVerifiedById(userId)
+
+  return (
+    // `flex-wrap` + `min-w-0` para o selo descer de linha em vez de esticar o
+    // cabeçalho quando o nome é longo; `items-center` alinha os dois pela
+    // altura da caixa do texto, não pela linha de base do bloco inteiro.
+    <h1 className="flex min-w-0 flex-wrap items-center gap-x-2 font-display text-2xl font-extrabold tracking-tight text-surface-900 sm:text-3xl">
+      <span className="min-w-0 break-words">{fullName}</span>
+      <VerifiedBadge verified={isVerified} size="lg" />
+    </h1>
+  )
+}
+
 function PageShell({ children }: { children: React.ReactNode }) {
   return <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">{children}</div>
 }
@@ -169,7 +190,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
 function BackLink() {
   return (
     <Link
-      to="/"
+      to={APP_HOME}
       // Sem padding nenhum, o alvo era a altura da própria linha de texto
       // (~20px) — e é o primeiro controle do topo da página. O `-ml-2`
       // compensa o padding novo para o texto continuar alinhado à margem.

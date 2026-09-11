@@ -25,6 +25,9 @@ export function AuthShell({
     <div className="flex min-h-dvh flex-col items-center justify-center bg-surface-0 px-4 py-10 sm:px-6">
       <main className={wide ? 'w-full max-w-lg' : 'w-full max-w-[400px]'}>
         <div className="mb-8 flex justify-center">
+          {/* Vai para a LANDING ("/"), não para o catálogo: quem está no
+              login/registro ainda não tem sessão, e a landing é a página que
+              apresenta o produto a essa pessoa. */}
           <Link to="/" className="rounded-md focus-ring" aria-label="Byou — início">
             <Logo className="text-[1.7rem]" />
           </Link>

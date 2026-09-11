@@ -4,6 +4,7 @@ import {
   clearCsrfToken,
   clearSessionToken,
   http,
+  publicHttp,
   setCsrfToken,
   setSessionToken,
 } from './client'
@@ -13,6 +14,7 @@ import {
   safeExternalUrl,
 } from '@/lib/validation'
 import type {
+  LandingResponse,
   CategoryRequest,
   CategoryResponse,
   CommentResponse,
@@ -28,14 +30,13 @@ import type {
   UserRegisterRequest,
   UserResponse,
   UserUpdateRequest,
+  UserUpdateVerifyAccountRequest,
   VideoResponse,
   VideoConfirmStatus,
   VideoStatus,
   VideoUploadMetadata,
   VideoUploadResponse,
 } from './types'
-
-/* ---------------------------------------------------------------- auth */
 
 export const authApi = {
   /** O login não devolve o usuário nem o token de SESSÃO no corpo — a sessão vai
@@ -150,6 +151,47 @@ export const authApi = {
     return data
   },
 
+  /** PUT /auth/users/verify-account/{email} — concede ou remove o selo de
+   *  verificado.
+   *
+   *  Rota SEPARADA do update de perfil de propósito: o PUT /auth/users/{email}
+   *  aceita o resto do cadastro mas ignora a verificação (dito no Swagger), o
+   *  que impede alguém conceder o selo a si mesmo editando o próprio perfil.
+   *
+   *  Exclusivo de ADMIN, e o backend recusa o e-mail da PRÓPRIA conta
+   *  autenticada com 403. A tela esconde a ação nesse caso, mas quem decide é
+   *  o servidor — a UI é conveniência, não a barreira.
+   *
+   *  `isVerified` vira `isVerifyAccount` no corpo (nome real do DTO) e vai
+   *  sempre explícito: ausente ou `null`, o backend devolve 200 sem alterar
+   *  nada, e a tela leria isso como sucesso.
+   *
+   *  Os dois erros ganham texto próprio porque os fallbacks por código não
+   *  dizem o que fazer aqui: "Você não tem permissão para fazer isso" não
+   *  explica que o bloqueio é a própria conta, e "Não encontramos o que você
+   *  procura" não deixa claro que o alvo é o usuário, não a tela. */
+  async setUserVerified(email: string, isVerified: boolean) {
+    const body: UserUpdateVerifyAccountRequest = { isVerifyAccount: isVerified }
+    try {
+      const { data } = await http.put<UserResponse>(
+        `/auth/users/verify-account/${encodeURIComponent(email)}`,
+        body,
+      )
+      return data
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        throw new ApiError(
+          'Só um administrador altera a verificação, e ninguém pode alterar a da própria conta.',
+          403,
+        )
+      }
+      if (error instanceof ApiError && error.status === 404) {
+        throw new ApiError('Esta conta não existe mais.', 404)
+      }
+      throw error
+    }
+  },
+
   async deleteUser(email: string) {
     const { data } = await http.delete<DeletedResponse>(
       `/auth/users/${encodeURIComponent(email)}`,
@@ -157,8 +199,6 @@ export const authApi = {
     return data
   },
 }
-
-/* --------------------------------------------------------------- video */
 
 export const videoApi = {
   async listAll() {
@@ -358,8 +398,6 @@ export const videoApi = {
   },
 }
 
-/* ------------------------------------------------------------ category */
-
 /** Categorias vivem sob /category (o controller usava @RequestMapping(name=...),
  *  que não define path e jogava as rotas na raiz; corrigido no backend em
  *  2026-08-09 e verificado ao vivo). */
@@ -387,8 +425,6 @@ export const categoryApi = {
     return data
   },
 }
-
-/* ------------------------------------------------------------- comments */
 
 export const commentApi = {
   async list(videoId: number) {
@@ -438,8 +474,6 @@ export const commentLikeApi = {
   },
 }
 
-/* ------------------------------------------------------------- feedback */
-
 export const feedbackApi = {
   /** GET /feedback/getFeedbacks — avaliacoes da PLATAFORMA INTEIRA.
    *
@@ -487,8 +521,6 @@ export const feedbackApi = {
   },
 }
 
-/* --------------------------------------------------------------- follow */
-
 export const followApi = {
   /** Quantos seguidores este usuário tem.
    *
@@ -515,5 +547,16 @@ export const followApi = {
 
   async unfollow(followedId: number) {
     await http.post(`/follow/users/${followedId}/unfollow`)
+  },
+}
+
+export const landingApi = {
+  /** GET /landing — números e vitrine da home pública, numa chamada só.
+   *
+   *  `publicHttp` e não `http`: esta rota tem de ser chamada sem cookie e sem
+   *  Authorization (ver client.ts). */
+  async get() {
+    const { data } = await publicHttp.get<LandingResponse>('/landing')
+    return data
   },
 }

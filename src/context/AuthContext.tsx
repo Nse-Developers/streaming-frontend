@@ -36,6 +36,14 @@ export interface AuthUser {
   email: string
   userAuth: UserAuth
   userTypeAccount: UserTypeAccount
+  /** Selo de verificado da PRÓPRIA conta, vindo de /auth/me.
+   *
+   *  Fica na sessão para o app saber rapidamente se o usuário logado é
+   *  verificado, mesmo quando a rota que está sendo carregada não repassa o
+   *  campo. Em 2026-09-10 o backend já entrega `userIsVerified` em várias
+   *  rotas, mas /auth/me continua sendo a fonte mais simples e direta para o
+   *  próprio usuário. */
+  isVerified: boolean
   /** Campos de perfil. Desde 2026-08-09 /auth/me devolve todos, o que permite
    *  ao formulário de perfil abrir preenchido em vez de em branco. */
   bio: string
@@ -76,6 +84,10 @@ function toAuthUser(response: UserResponse): AuthUser {
     email: response.email,
     userAuth: response.userAuth,
     userTypeAccount: response.typeAccount,
+    // `=== true` e não `??`: contra um backend anterior à feature o campo vem
+    // `undefined`, e o que se quer nesse caso é "não verificado na tela", não
+    // um valor ausente vazando para dentro do app como se fosse booleano.
+    isVerified: response.userIsVerified === true,
     // O backend declara estas colunas NOT NULL, mas contas antigas podem ter
     // vindo de antes disso — o ?? evita um campo `undefined` chegar no form.
     bio: response.bio ?? '',

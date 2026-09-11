@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { ShieldAlert, ArrowLeft, UploadCloud } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/Button'
+import { APP_HOME } from '@/lib/nav'
 
 const ACCOUNT_LABEL = { CREATORS: 'Criador', VIEWERS: 'Espectador' } as const
 
@@ -56,7 +57,7 @@ export function ForbiddenPage() {
       )}
 
       <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-        <Link to="/">
+        <Link to={APP_HOME}>
           <Button variant="primary">
             <ArrowLeft size={16} />
             Voltar ao início

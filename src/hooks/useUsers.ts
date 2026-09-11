@@ -43,6 +43,53 @@ export function useUpdateProfile() {
   })
 }
 
+/** PUT /auth/users/verify-account/{email} — liga/desliga o selo de verificado.
+ *
+ *  Invalida `['users']` em vez de escrever a resposta no cache: a lista é a
+ *  fonte da seção de verificação do admin E do `useVerifiedById` abaixo, e um
+ *  refetch garante que as duas leiam o mesmo estado que o servidor confirmou.
+ *  A resposta traz o UserResponse atualizado, mas confiar nela deixaria o
+ *  resto da lista com o dado antigo se outro admin tivesse mexido em paralelo.
+ *
+ *  Não invalida `['users','public',id]`: o DTO público não tem o campo, então
+ *  nada mudaria ali. */
+export function useSetUserVerified() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ email, isVerified }: { email: string; isVerified: boolean }) =>
+      authApi.setUserVerified(email, isVerified),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  })
+}
+
+/** Descobre se um usuário QUALQUER tem o selo, pelo id.
+ *
+ *  Devolve `undefined` para "não sei", que é diferente de `false`. O
+ *  VerifiedBadge só desenha no `true`, então um dado desconhecido nunca aparece
+ *  como "não verificado".
+ *
+ *  Hoje a API já entrega `userIsVerified` em `/auth/me`, `/auth/users`,
+ *  `/auth/user/{id}`, `/video` e `/comments/{id}` — em 2026-09-10. O hook
+ *  continua útil como fallback para qualquer backend antigo ou para uma tela
+ *  que ainda não passou a ler o campo direto da resposta, mas a regra correta
+ *  é usar o valor vindo da API em cada item renderizado.
+ *
+ *  A lista entra com `enabled: false`: o hook ASSINA o cache (e re-renderiza
+ *  quando ele muda, como depois de `useSetUserVerified`) mas nunca dispara a
+ *  request. Isso evita um fetch de toda a base só para desenhar selos. */
+export function useVerifiedById(userId: number | null | undefined): boolean | undefined {
+  const { user } = useAuth()
+  const { data: allUsers } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => authApi.listUsers(),
+    enabled: false,
+  })
+
+  if (userId == null) return undefined
+  if (user?.id === userId) return user.isVerified
+  return allUsers?.find((item) => item.id === userId)?.userIsVerified
+}
+
 export function useDeleteUser() {
   const queryClient = useQueryClient()
   return useMutation({

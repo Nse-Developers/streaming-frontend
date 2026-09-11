@@ -19,6 +19,7 @@ import { toErrorMessage } from '@/api/client'
 import { safeExternalUrl } from '@/lib/validation'
 import { formatRelativeDate } from '@/lib/format'
 import { STATUS_LABEL, canView } from '@/lib/video'
+import { APP_HOME } from '@/lib/nav'
 
 export function VideoPage() {
   const { id } = useParams<{ id: string }>()
@@ -53,7 +54,7 @@ export function VideoPage() {
           title="Endereço inválido"
           description="O identificador do vídeo não é um número válido."
           action={
-            <Link to="/">
+            <Link to={APP_HOME}>
               <Button variant="secondary">Voltar ao início</Button>
             </Link>
           }
@@ -106,7 +107,7 @@ export function VideoPage() {
             isError ? toErrorMessage(error) : 'Este vídeo não existe ou não está mais disponível.'
           }
           action={
-            <Link to="/">
+            <Link to={APP_HOME}>
               <Button variant="secondary">Voltar ao início</Button>
             </Link>
           }
@@ -138,10 +139,7 @@ export function VideoPage() {
           </h1>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[13px] text-surface-600 sm:text-sm">
-            {/* TEMP: contagem de visualizacoes escondida a pedido do time.
-                Para voltar, reponha:
-                <span className="tabular-nums">{formatViews(video.views)}</span>
-                <span aria-hidden="true">·</span> */}
+            {/* TEMP: contagem de visualizacoes escondida a pedido do time. */}
             <span>{formatRelativeDate(video.uploadDate)}</span>
             {video.status !== 'PUBLISHED' && (
               <Badge tone="neutral">{STATUS_LABEL[video.status] ?? video.status}</Badge>
@@ -160,7 +158,8 @@ export function VideoPage() {
                 <UserLink
                   userId={video.userId}
                   name={video.creatorName}
-                  className="block truncate font-display text-sm font-semibold text-surface-900"
+                  badgeSize="md"
+                  className="font-display text-sm font-semibold text-surface-900"
                 />
                 <p className="text-xs text-surface-600">
                   Criador

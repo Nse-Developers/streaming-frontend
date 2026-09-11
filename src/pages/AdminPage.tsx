@@ -17,6 +17,9 @@ import {
   ImageOff,
   Star,
   MessageSquare,
+  BadgeCheck,
+  BadgeX,
+  Search,
 } from 'lucide-react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
@@ -32,7 +35,8 @@ import {
   useDeleteCategory,
   useUpdateCategory,
 } from '@/hooks/useCategories'
-import { useUsers, useDeleteUser } from '@/hooks/useUsers'
+import { VerifiedBadge } from '@/components/user/VerifiedBadge'
+import { useUsers, useDeleteUser, useSetUserVerified } from '@/hooks/useUsers'
 import { useFeedbacks } from '@/hooks/useFeedback'
 import { useVideos, useDeleteVideo, useUpdateVideoStatus } from '@/hooks/useVideos'
 import { useToast } from '@/context/ToastContext'
@@ -41,7 +45,8 @@ import { toErrorMessage } from '@/api/client'
 import { categorySchema, type CategoryValues } from '@/lib/validation'
 import { formatRelativeDate } from '@/lib/format'
 import { STATUS_LABEL, type UiVideo } from '@/lib/video'
-import type { CategoryResponse, VideoStatus } from '@/api/types'
+import { cn } from '@/lib/cn'
+import type { CategoryResponse, UserResponse, VideoStatus } from '@/api/types'
 
 export function AdminPage() {
   const users = useUsers()
@@ -50,7 +55,6 @@ export function AdminPage() {
   const feedbacks = useFeedbacks()
 
   // TEMP: total de visualizacoes desativado junto com o card da metrica.
-  // const totalViews = (videos.data ?? []).reduce((sum, video) => sum + (video.views ?? 0), 0)
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-16 pt-6 sm:px-6">
@@ -75,14 +79,7 @@ export function AdminPage() {
       <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <Metric label="Usuários" value={users.data?.length} icon={UsersIcon} loading={users.isLoading} />
         <Metric label="Vídeos" value={videos.data?.length} icon={Film} loading={videos.isLoading} />
-        {/* TEMP: metrica de visualizacoes escondida a pedido do time.
-            Para voltar, reponha este card (e o totalViews acima):
-            <Metric
-              label="Visualizações"
-              value={videos.data ? formatCompact(totalViews) : undefined}
-              icon={Eye}
-              loading={videos.isLoading}
-            /> */}
+        {/* TEMP: metrica de visualizacoes escondida a pedido do time. */}
         <Metric
           label="Categorias"
           value={categories.data?.length}
@@ -98,6 +95,16 @@ export function AdminPage() {
           value={feedbacks.data?.length}
           icon={MessageSquare}
           loading={feedbacks.isLoading}
+        />
+        {/* Verificados ao lado do total de usuários, e não na seção de
+            verificação: é a mesma leitura de "quanto da base" que as outras
+            métricas dão, e é o número que o admin quer antes de decidir se
+            precisa abrir a seção. */}
+        <Metric
+          label="Verificados"
+          value={users.data?.filter((item) => item.userIsVerified === true).length}
+          icon={BadgeCheck}
+          loading={users.isLoading}
         />
         <Metric
           label="Nota média"
@@ -117,6 +124,7 @@ export function AdminPage() {
       </div>
 
       <UsersSection />
+      <VerificationSection />
       <VideosSection />
       <CategoriesSection />
       <FeedbacksSection />
@@ -226,10 +234,14 @@ function UsersSection() {
               <li key={item.id} className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4">
                 <Avatar name={fullName} className="h-10 w-10 text-sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-surface-900">
-                    {fullName}
+                  {/* `flex` em vez de `truncate` no <p>: o selo e a etiqueta
+                      "você" ficam fora do nó que trunca, senão um nome longo
+                      apagava justamente os dois. */}
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-surface-900">
+                    <span className="min-w-0 truncate">{fullName}</span>
+                    <VerifiedBadge verified={item.userIsVerified} size="sm" />
                     {isSelf && (
-                      <span className="ml-2 rounded bg-surface-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-surface-600">
+                      <span className="shrink-0 rounded bg-surface-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-surface-600">
                         você
                       </span>
                     )}
@@ -286,6 +298,293 @@ function UsersSection() {
         </div>
       </Modal>
     </section>
+  )
+}
+
+/** Verificação de contas — PUT /auth/users/verify-account/{email}.
+ *
+ *  Seção separada da de "Usuários" de propósito, e não um quarto botão nas
+ *  linhas de lá: conceder um selo é uma decisão editorial, não manutenção de
+ *  cadastro, e é a única ação desta tela que muda o que TODO visitante vê ao
+ *  lado de um nome. Junto do botão de excluir, um clique errado por vizinhança
+ *  sairia caro. A separação também abre espaço para o filtro e a busca, que são
+ *  o que torna a lista utilizável — a rota devolve a base inteira, sem
+ *  paginação nem filtro no servidor.
+ *
+ *  Lê o MESMO `useUsers()` da seção de cima: as duas compartilham a chave
+ *  ['users'] no React Query, então não há uma segunda request — e um selo
+ *  concedido aqui reaparece na outra lista (e na métrica do topo) sozinho,
+ *  porque a mutation invalida essa chave.
+ *
+ *  O admin não recebe ação disponível para a PRÓPRIA conta: o backend responde
+ *  403 nesse caso, e a interface reflete a regra em vez de deixar o usuário
+ *  descobrir pelo erro. A barreira real continua sendo o servidor. */
+const VERIFY_FILTERS = [
+  { key: 'all', label: 'Todos' },
+  { key: 'verified', label: 'Verificados' },
+  { key: 'unverified', label: 'Não verificados' },
+] as const
+
+type VerifyFilter = (typeof VERIFY_FILTERS)[number]['key']
+
+function VerificationSection() {
+  const { user: currentUser } = useAuth()
+  const { data, isLoading, isError, error, refetch, isFetching } = useUsers()
+  const [filter, setFilter] = useState<VerifyFilter>('all')
+  const [search, setSearch] = useState('')
+  const [visible, setVisible] = useState(FIRST_PAGE)
+
+  const all = data ?? []
+  const term = search.trim().toLowerCase()
+
+  const filtered = all.filter((item) => {
+    // `=== true` e não truthy: contra um backend sem a feature o campo vem
+    // `undefined`, e o filtro "Não verificados" deve listar essas contas em
+    // vez de sumir com elas.
+    const isVerified = item.userIsVerified === true
+    if (filter === 'verified' && !isVerified) return false
+    if (filter === 'unverified' && isVerified) return false
+    if (!term) return true
+    // Nome OU e-mail: o admin costuma ter só um dos dois em mão.
+    return [item.name, item.surname, item.email]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(term)
+  })
+
+  const shown = filtered.slice(0, visible)
+  const remaining = filtered.length - shown.length
+
+  return (
+    <section className="mt-11">
+      <div className="mb-4 flex items-baseline justify-between gap-3">
+        <h2 className="font-display text-lg font-bold text-surface-900">Verificação</h2>
+        {!isLoading && !isError && (
+          <p className="text-xs tabular-nums text-surface-600">
+            {shown.length} de {filtered.length}
+          </p>
+        )}
+      </div>
+
+      <p className="-mt-2 mb-4 text-[13px] leading-relaxed text-surface-600">
+        O selo de verificado aparece ao lado do nome da conta em toda a
+        plataforma. Só administradores podem concedê-lo, e ninguém pode alterar
+        o da própria conta.
+      </p>
+
+      {!isLoading && !isError && all.length > 0 && (
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          {/* Botões com `aria-pressed`, não `role="tab"`: isto filtra uma lista
+              só, não alterna entre painéis diferentes — e declarar abas sem
+              painéis obrigaria a navegação por setas que não existe aqui. O
+              desenho é o mesmo da fita de abas do perfil. */}
+          <div role="group" aria-label="Filtrar por verificação" className="flex gap-2">
+            {VERIFY_FILTERS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={filter === key}
+                onClick={() => {
+                  setFilter(key)
+                  // Volta à primeira página ao trocar de filtro: manter o "ver
+                  // mais" anterior mostrava "30 de 4".
+                  setVisible(FIRST_PAGE)
+                }}
+                className={cn(
+                  'shrink-0 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors duration-150 focus-ring max-sm:min-h-[44px]',
+                  filter === key
+                    ? 'bg-surface-900 text-surface-0'
+                    : 'bg-surface-200 text-surface-700 hover:bg-surface-300',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative sm:ml-auto sm:w-64">
+            <Search
+              size={15}
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-surface-600"
+            />
+            <Input
+              type="search"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value)
+                setVisible(FIRST_PAGE)
+              }}
+              placeholder="Buscar por nome ou e-mail"
+              // Sem rótulo VISÍVEL (o ícone e o placeholder já dizem o que é, e
+              // um label desalinharia a altura da fita de filtros ao lado), mas
+              // com nome acessível: o campo não pode ser anunciado apenas como
+              // "edição, em branco".
+              aria-label="Buscar usuário por nome ou e-mail"
+              className="pl-9"
+            />
+          </div>
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-16 rounded-xl" />
+          ))}
+        </div>
+      )}
+
+      {isError && (
+        <EmptyState
+          icon={ServerCrash}
+          title="Não foi possível carregar os usuários"
+          description={toErrorMessage(error)}
+          action={
+            <Button variant="secondary" onClick={() => refetch()} isLoading={isFetching}>
+              <RotateCw size={16} />
+              Tentar de novo
+            </Button>
+          }
+        />
+      )}
+
+      {!isLoading && !isError && shown.length > 0 && (
+        <ul className="divide-y divide-surface-200 overflow-hidden rounded-xl border border-surface-200 bg-surface-100">
+          {shown.map((item) => (
+            <VerificationRow
+              key={item.id}
+              user={item}
+              isSelf={item.email === currentUser?.email}
+            />
+          ))}
+        </ul>
+      )}
+
+      {remaining > 0 && (
+        <div className="mt-3 flex justify-center">
+          <Button variant="secondary" onClick={() => setVisible((v) => v + PAGE_STEP)}>
+            Ver mais {Math.min(remaining, PAGE_STEP)}
+            <ChevronDown size={16} />
+          </Button>
+        </div>
+      )}
+
+      {/* Dois vazios diferentes: base vazia é um estado do sistema; filtro sem
+          resultado é consequência do que o admin acabou de digitar — e neste a
+          saída é limpar o filtro, não esperar. */}
+      {!isLoading && !isError && all.length === 0 && (
+        <EmptyState icon={UsersIcon} title="Nenhum usuário cadastrado" />
+      )}
+
+      {!isLoading && !isError && all.length > 0 && filtered.length === 0 && (
+        <EmptyState
+          icon={Search}
+          title="Nenhum usuário encontrado"
+          description={
+            term
+              ? 'Nada corresponde à busca dentro deste filtro.'
+              : filter === 'verified'
+                ? 'Nenhuma conta verificada ainda.'
+                : 'Todas as contas estão verificadas.'
+          }
+          action={
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setSearch('')
+                setFilter('all')
+                setVisible(FIRST_PAGE)
+              }}
+            >
+              Limpar filtros
+            </Button>
+          }
+        />
+      )}
+    </section>
+  )
+}
+
+/** Uma conta na lista de verificação.
+ *
+ *  A mutation vive NA LINHA, e não na seção, para que `isPending` seja o estado
+ *  daquela conta: compartilhada, clicar em "Verificar" numa linha punha todas
+ *  as outras em carregamento. Mesmo arranjo do VideoRow acima. */
+function VerificationRow({ user, isSelf }: { user: UserResponse; isSelf: boolean }) {
+  const { showToast } = useToast()
+  const setVerified = useSetUserVerified()
+
+  const isVerified = user.userIsVerified === true
+  const fullName = [user.name, user.surname].filter(Boolean).join(' ').trim() || user.email
+  const firstName = user.name || user.email
+
+  const toggle = async () => {
+    // Guarda redundante com o `disabled` do botão, de propósito: um clique que
+    // escape do estado da tela não deve disparar uma request que o backend já
+    // vai recusar com 403.
+    if (isSelf) return
+    const next = !isVerified
+    try {
+      await setVerified.mutateAsync({ email: user.email, isVerified: next })
+      showToast(
+        next
+          ? `${firstName} agora tem o selo de verificado.`
+          : `Selo de verificado removido de ${firstName}.`,
+        'success',
+      )
+    } catch (err) {
+      showToast(toErrorMessage(err), 'error')
+    }
+  }
+
+  return (
+    <li className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4">
+      <Avatar name={fullName} className="h-10 w-10 text-sm" />
+
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 text-sm font-semibold text-surface-900">
+          <span className="min-w-0 truncate">{fullName}</span>
+          <VerifiedBadge verified={user.userIsVerified} size="sm" />
+          {isSelf && (
+            <span className="shrink-0 rounded bg-surface-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-surface-600">
+              você
+            </span>
+          )}
+        </p>
+        <p className="truncate text-xs text-surface-600">{user.email}</p>
+      </div>
+
+      {/* O motivo do bloqueio vai no `title` E no `aria-label`: um botão
+          desabilitado não é alcançável pelo Tab, então sem o rótulo quem usa
+          leitor de tela encontraria só um controle inerte e sem explicação. */}
+      <Button
+        variant={isVerified ? 'ghost' : 'secondary'}
+        size="sm"
+        disabled={isSelf}
+        isLoading={setVerified.isPending}
+        onClick={toggle}
+        title={
+          isSelf
+            ? 'Você não pode alterar a verificação da própria conta.'
+            : isVerified
+              ? `Remover o selo de ${firstName}`
+              : `Verificar ${firstName}`
+        }
+        aria-label={
+          isSelf
+            ? `Alterar a verificação de ${fullName} — indisponível na própria conta`
+            : isVerified
+              ? `Remover o selo de verificado de ${fullName}`
+              : `Conceder o selo de verificado a ${fullName}`
+        }
+        className={cn('ml-auto max-sm:w-full', isVerified && 'text-surface-600')}
+      >
+        {isVerified ? <BadgeX size={15} /> : <BadgeCheck size={15} />}
+        {isVerified ? 'Remover selo' : 'Verificar'}
+      </Button>
+    </li>
   )
 }
 
@@ -412,8 +711,7 @@ function VideoRow({ video }: { video: UiVideo }) {
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-surface-900">{video.tittle}</p>
-        {/* TEMP: contagem de views escondida a pedido do time — para voltar,
-            acrescente `· {formatCompact(video.views ?? 0)} views`. */}
+        {/* TEMP: contagem de views escondida a pedido do time. */}
         <p className="truncate text-xs text-surface-600">
           {video.creatorName} · {STATUS_LABEL[video.status] ?? video.status}
         </p>

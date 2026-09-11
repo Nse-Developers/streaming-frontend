@@ -247,8 +247,6 @@ export const categorySchema = z.object({
 })
 export type CategoryValues = z.infer<typeof categorySchema>
 
-/* --------------------------------------------------------------- upload */
-
 const MB = 1024 * 1024
 const GB = 1024 * MB
 
