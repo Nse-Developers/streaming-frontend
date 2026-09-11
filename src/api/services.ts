@@ -36,8 +36,6 @@ import type {
   VideoUploadResponse,
 } from './types'
 
-/* ---------------------------------------------------------------- auth */
-
 export const authApi = {
   /** O login não devolve o usuário nem o token de SESSÃO no corpo — a sessão vai
    *  só no Set-Cookie (byou_session, HttpOnly). Depois de chamar isto, use
@@ -199,8 +197,6 @@ export const authApi = {
     return data
   },
 }
-
-/* --------------------------------------------------------------- video */
 
 export const videoApi = {
   async listAll() {
@@ -400,8 +396,6 @@ export const videoApi = {
   },
 }
 
-/* ------------------------------------------------------------ category */
-
 /** Categorias vivem sob /category (o controller usava @RequestMapping(name=...),
  *  que não define path e jogava as rotas na raiz; corrigido no backend em
  *  2026-08-09 e verificado ao vivo). */
@@ -429,8 +423,6 @@ export const categoryApi = {
     return data
   },
 }
-
-/* ------------------------------------------------------------- comments */
 
 export const commentApi = {
   async list(videoId: number) {
@@ -480,8 +472,6 @@ export const commentLikeApi = {
   },
 }
 
-/* ------------------------------------------------------------- feedback */
-
 export const feedbackApi = {
   /** GET /feedback/getFeedbacks — avaliacoes da PLATAFORMA INTEIRA.
    *
@@ -528,8 +518,6 @@ export const feedbackApi = {
     await http.delete(`/feedback/${videoId}`)
   },
 }
-
-/* --------------------------------------------------------------- follow */
 
 export const followApi = {
   /** Quantos seguidores este usuário tem.

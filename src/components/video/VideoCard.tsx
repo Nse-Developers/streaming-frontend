@@ -109,8 +109,7 @@ function Meta({ video }: { video: UiVideo }) {
       {/* `block truncate` também na segunda linha: como <span> em fluxo, "1,4
           mil visualizações · há 2 meses" quebrava palavra a palavra quando o
           card ficava estreito. Truncar mantém a linha única e legível.
-          TEMP: contagem de visualizacoes escondida a pedido do time — para
-          voltar, use `{formatViews(video.views)} · {formatRelativeDate(...)}`. */}
+          TEMP: contagem de visualizacoes escondida a pedido do time. */}
       <span className="block truncate tabular-nums">
         {formatRelativeDate(video.uploadDate)}
       </span>

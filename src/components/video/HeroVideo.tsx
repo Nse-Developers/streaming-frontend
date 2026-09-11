@@ -89,10 +89,7 @@ function HeroBody({ video }: { video: UiVideo }) {
             {video.creatorName}
             <VerifiedBadge verified={creatorIsVerified} size="sm" tone="media" />
           </span>
-          {/* TEMP: contagem de visualizacoes escondida a pedido do time.
-              Para voltar, reponha o separador + o span abaixo:
-              <span aria-hidden="true">·</span>
-              <span className="tabular-nums">{formatViews(video.views)}</span> */}
+          {/* TEMP: contagem de visualizacoes escondida a pedido do time. */}
           <span aria-hidden="true">·</span>
           <span>{formatRelativeDate(video.uploadDate)}</span>
         </div>

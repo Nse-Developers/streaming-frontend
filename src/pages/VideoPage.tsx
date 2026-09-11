@@ -139,10 +139,7 @@ export function VideoPage() {
           </h1>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[13px] text-surface-600 sm:text-sm">
-            {/* TEMP: contagem de visualizacoes escondida a pedido do time.
-                Para voltar, reponha:
-                <span className="tabular-nums">{formatViews(video.views)}</span>
-                <span aria-hidden="true">·</span> */}
+            {/* TEMP: contagem de visualizacoes escondida a pedido do time. */}
             <span>{formatRelativeDate(video.uploadDate)}</span>
             {video.status !== 'PUBLISHED' && (
               <Badge tone="neutral">{STATUS_LABEL[video.status] ?? video.status}</Badge>
