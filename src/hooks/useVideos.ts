@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { videoApi } from '@/api/services'
 import type { VideoConfirmStatus, VideoStatus, VideoUploadMetadata } from '@/api/types'
-import { toUiVideos } from '@/lib/video'
+import { publicVideos, toUiVideos } from '@/lib/video'
 import { useAuth } from '@/context/AuthContext'
 
 /** Feed principal. `GET /video` é PÚBLICO desde 2026-09-02 — o backend deixou
@@ -22,6 +22,51 @@ export function useVideos() {
     queryFn: async () => toUiVideos(await videoApi.listAll()),
     enabled: isReady,
   })
+}
+
+/** Vitrine da landing: os vídeos publicados mais recentes, ou `null`.
+ *
+ *  `null` é o contrato com a página — e não uma lista vazia — porque a landing
+ *  TEM um conteúdo de apresentação estático para cair de volta. Enquanto a
+ *  rota não responde, a página mostra esse conteúdo em vez de um buraco, um
+ *  spinner eterno ou um erro: ela é a porta de entrada do produto para quem
+ *  ainda não tem conta, e falhar visivelmente ali é o pior lugar possível.
+ *
+ *  Hoje `GET /video` responde 403 sem sessão na API hospedada, apesar de
+ *  useVideos() acima documentar a rota como pública desde 2026-09-02. Este
+ *  hook não tenta contornar isso: com 403 ele devolve `null` e a landing segue
+ *  estática. No dia em que o backend liberar a rota, a vitrine passa a mostrar
+ *  o acervo real sozinha, sem tocar no front.
+ *
+ *  `retry: false` porque 403 não melhora com insistência, e o custo de errar
+ *  aqui é atrasar a primeira tela que o visitante vê. */
+export function useShowcaseVideos(limit = 4) {
+  const { isReady } = useAuth()
+  const query = useQuery({
+    queryKey: ['videos', 'showcase'],
+    queryFn: async () => toUiVideos(await videoApi.listAll()),
+    enabled: isReady,
+    retry: false,
+    // A landing é cacheável de forma agressiva: o acervo não muda no intervalo
+    // de uma visita, e revalidar a cada foco custaria uma requisição por
+    // alt-tab numa página que a pessoa mantém aberta enquanto decide.
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  })
+
+  if (!query.data) return null
+
+  const items = publicVideos(query.data)
+    // Mais recente primeiro. A vitrine se chama "veja como é o feed de
+    // verdade": mostrar o acervo antigo contradiz a promessa.
+    .slice()
+    .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime())
+    .filter((video) => video.id != null && video.safeThumbnail)
+    .slice(0, limit)
+
+  // Menos que `limit` fica pior que o estático: a grade de 4 colunas abriria
+  // com um ou dois cards e um vazio do lado.
+  return items.length === limit ? items : null
 }
 
 /** Vídeos do usuário logado num status específico (aba "Meus vídeos"). */
