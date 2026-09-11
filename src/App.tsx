@@ -2,9 +2,11 @@ import { Suspense, lazy } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
+  LandingOrHome,
   RedirectIfAuthenticated,
   RequireAdmin,
   RequireAuth,
+  RequireAuthPlayer,
   RequireCreator,
 } from '@/components/auth/RouteGuards'
 import { Spinner } from '@/components/ui/Spinner'
@@ -16,6 +18,7 @@ import { ProfilePage } from '@/pages/ProfilePage'
 import { UserProfilePage } from '@/pages/UserProfilePage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { ForbiddenPage } from '@/pages/ForbiddenPage'
+import { LandingPage } from '@/pages/LandingPage'
 
 /** Telas carregadas SÓ quando a rota é aberta.
  *
@@ -43,16 +46,22 @@ function RouteFallback() {
   )
 }
 
-/** Toda rota privada passa por um guard.
+/** Só a home é aberta; toda outra rota passa por um guard.
  *
- *  Acessar a URL direto (colando no navegador) cai na mesma checagem: sem
- *  sessão vai para /login guardando o destino; com sessão mas sem o papel
- *  necessário vai para /403 com explicação. Os guards espelham as regras do
- *  SecurityConfig do backend — a autorização real continua sendo do servidor.
- */
+ *  Sem sessão, o guard não redireciona: mostra o AuthWall — a tela pedida
+ *  desfocada com um aviso de login por cima (ver RouteGuards). O visitante
+ *  chega nessas rotas clicando, e trocar a tela dele por um formulário apaga o
+ *  contexto. Com sessão mas sem o papel necessário, continua indo para /403,
+ *  que explica qual papel falta.
+ *
+ *  Os guards espelham as regras do SecurityConfig do backend — a autorização
+ *  real continua sendo do servidor. O que muda aqui é só o que se DESENHA:
+ *  nenhum dado privado chega ao navegador de quem não tem sessão. */
 export default function App() {
   return (
     <Routes>
+      {/* Raiz: landing para visitante, catálogo para quem já tem sessão. */}
+      <Route path="/" element={<LandingOrHome landing={<LandingPage />} />} />
       <Route
         path="/login"
         element={
@@ -71,10 +80,22 @@ export default function App() {
       />
 
       <Route element={<AppLayout withSearch />}>
-        {/* Home exige sessão: GET /video hoje falha sem token. */}
-        <Route element={<RequireAuth />}>
-          <Route path="/" element={<HomePage />} />
+        {/* Catálogo ABERTO: `GET /video` é público, então o visitante que vem
+            da landing vê os vídeos de verdade sem precisar de conta. A landing
+            (rota "/") apresenta o produto; aqui ele começa a usá-lo.
+
+            Mora em /home, e não em "/", porque a landing ocupa a raiz. Quem
+            chega logado é mandado para cá — ver RedirectIfAuthenticated. */}
+        <Route path="/home" element={<HomePage />} />
+
+        {/* O player continua exigindo sessão porque GET /video/{id} exige: é
+            ele que devolve a URL assinada de reprodução. Ver as capas é
+            público; dar play não. */}
+        <Route element={<RequireAuthPlayer />}>
           <Route path="/videos/:id" element={<VideoPage />} />
+        </Route>
+
+        <Route element={<RequireAuth />}>
           <Route path="/profile" element={<ProfilePage />} />
           {/* Perfil público de outra pessoa. RequireAuth basta: a rota do
               backend (GET /auth/user/{id}) libera para CREATORS e VIEWERS, que

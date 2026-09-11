@@ -4,14 +4,23 @@ import type { VideoConfirmStatus, VideoStatus, VideoUploadMetadata } from '@/api
 import { toUiVideos } from '@/lib/video'
 import { useAuth } from '@/context/AuthContext'
 
-/** Feed principal. GET /video hoje exige token na prática (o service do backend
- *  chama getAuthenticate() mesmo na rota pública), então só busca com sessão. */
+/** Feed principal. `GET /video` é PÚBLICO desde 2026-09-02 — o backend deixou
+ *  de exigir autenticação nessa rota, e é o que permite a home abrir para
+ *  visitante. Sem `enabled` de sessão: a query roda para todo mundo.
+ *
+ *  Continua dependendo de `isReady` para não disparar duas vezes no boot. A
+ *  primeira chamada saía anônima e, assim que /auth/me respondesse, o
+ *  `queryClient.clear()` do login a descartaria — buscar a lista inteira duas
+ *  vezes por carregamento. Esperar a sessão ser resolvida custa alguns
+ *  milissegundos e faz uma requisição só, já com o cookie certo (o backend
+ *  entrega mais coisa a quem está logado: rascunho e privado do próprio dono).
+ */
 export function useVideos() {
-  const { isAuthenticated, isReady } = useAuth()
+  const { isReady } = useAuth()
   return useQuery({
     queryKey: ['videos'],
     queryFn: async () => toUiVideos(await videoApi.listAll()),
-    enabled: isReady && isAuthenticated,
+    enabled: isReady,
   })
 }
 

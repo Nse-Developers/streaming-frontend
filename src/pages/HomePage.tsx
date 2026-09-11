@@ -1,6 +1,15 @@
 import { useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Film, SearchX, ServerCrash, RotateCw, UploadCloud, Pin, PinOff } from 'lucide-react'
+import {
+  Film,
+  SearchX,
+  ServerCrash,
+  RotateCw,
+  UploadCloud,
+  LogIn,
+  Pin,
+  PinOff,
+} from 'lucide-react'
 import { useVideos } from '@/hooks/useVideos'
 import { useFeaturedVideo } from '@/hooks/useFeaturedVideo'
 import { VideoCard } from '@/components/video/VideoCard'
@@ -29,7 +38,10 @@ const GRID =
 
 export function HomePage() {
   const { data: videos, isLoading, isError, error, refetch, isFetching } = useVideos()
-  const { isCreator, isAdmin } = useAuth()
+  // `isAuthenticated` importa aqui porque esta tela agora atende visitante: o
+  // feed é público, mas as chamadas para ação (enviar vídeo, destacar) só
+  // fazem sentido para quem tem conta e papel.
+  const { isAuthenticated, isCreator, isAdmin } = useAuth()
   const { showToast } = useToast()
   const [params] = useSearchParams()
   const rawSearch = params.get('q')?.trim() ?? ''
@@ -64,6 +76,11 @@ export function HomePage() {
     )
   }
 
+  // Erro aqui é erro de verdade (rede, 500), e a saída é tentar de novo. NÃO
+  // existe ramo de "faça login para ver": `GET /video` é público, então 401/403
+  // no feed não é um estado que o visitante deva ser convidado a resolver
+  // entrando — é uma falha de configuração, e mandá-lo ao login esconderia isso
+  // atrás de uma parede que este trabalho justamente veio remover.
   if (isError) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
@@ -134,6 +151,16 @@ export function HomePage() {
                 <Button>
                   <UploadCloud size={16} />
                   Enviar meu primeiro vídeo
+                </Button>
+              </Link>
+            ) : !isAuthenticated ? (
+              // Catálogo vazio é o pior primeiro contato possível: a tela não
+              // tem nada para mostrar e nenhum caminho a seguir. O convite a
+              // entrar dá ao visitante alguma coisa para fazer.
+              <Link to="/login">
+                <Button variant="secondary">
+                  <LogIn size={16} />
+                  Entrar na minha conta
                 </Button>
               </Link>
             ) : undefined
