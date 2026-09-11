@@ -158,6 +158,24 @@ export function LandingPage() {
                   real são os três vídeos de GET /landing, o mais visto no
                   destaque — a ordem já vem pronta do backend. Sem ele, a grade
                   de apresentação. */}
+              {/* Só com acervo real: sobre a grade de apresentação a etiqueta
+                  seria uma afirmação sobre dados que não existem.
+
+                  "Mais vistos agora" e não "atualizado em tempo real": a lista
+                  vem ordenada por views pelo backend (isso é exato), mas a
+                  página revalida a cada 10 min e ao voltar o foco — não é um
+                  fluxo ao vivo, e prometer isso seria vender atualização que a
+                  tela não entrega.
+
+                  O verde fica só no ponto, que é decorativo: como o index.css
+                  registra, `success-500` dá 2.67:1 sobre o card e reprovaria
+                  como cor de texto. */}
+              {showcase && (
+                <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-surface-300 bg-surface-100 px-3 py-1.5 text-[11px] font-semibold text-surface-700">
+                  <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-full bg-success-500" />
+                  Mais vistos agora
+                </span>
+              )}
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {showcase ? (
                   <>
@@ -204,7 +222,7 @@ export function LandingPage() {
             mesma tela. Com mais vídeos na rota, esta seção volta a ter
             conteúdo próprio. */}
         {!showcase && (
-        <section id="vitrine" className="mx-auto max-w-[1280px] px-4 py-16 sm:px-6 md:py-24 lg:px-8"><div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><SectionHeading align="left" title="Veja como é o feed de verdade" description="Sem clickbaits chamativos ou títulos em caixa alta enganosos." /><span className="inline-flex h-fit items-center gap-2 rounded-md border border-surface-300 bg-surface-100 px-3 py-2 text-xs text-surface-600"><span className="h-2 w-2 rounded-full bg-success-500" />Atualizado em tempo real</span></div>{/* Filtros por categoria valem só para o conteúdo de apresentação: GET
+        <section id="vitrine" className="mx-auto max-w-[1280px] px-4 py-16 sm:px-6 md:py-24 lg:px-8"><div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><SectionHeading align="left" title="Veja como é o feed de verdade" description="Sem clickbaits chamativos ou títulos em caixa alta enganosos." />{/* Sem "Atualizado em tempo real": esta seção só aparece quando a rota NÃO respondeu, e o que ela mostra é conteúdo de apresentação fixo. A etiqueta de atualização vive no hero, onde os vídeos são de verdade. */}</div>{/* Filtros por categoria valem só para o conteúdo de apresentação: GET
             /video não devolve categoria, então com acervo real não há o que
             filtrar — a barra sairia com um "Todos" sozinho. */}
           <div className="mt-8 flex gap-2 overflow-x-auto pb-2">{filters.map((item) => <button type="button" key={item} onClick={() => setFilter(item)} className={`whitespace-nowrap rounded-md px-4 py-2 text-xs font-semibold focus-ring ${filter === item ? 'bg-brand-500 text-white' : 'border border-surface-300 bg-surface-100 text-surface-600 hover:bg-surface-200'}`}>{item}</button>)}</div>
