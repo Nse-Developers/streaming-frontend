@@ -17,7 +17,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
 import { toErrorMessage } from '@/api/client'
 import { safeExternalUrl } from '@/lib/validation'
-import { formatViews, formatRelativeDate } from '@/lib/format'
+import { formatRelativeDate } from '@/lib/format'
 import { STATUS_LABEL, canView } from '@/lib/video'
 import { APP_HOME } from '@/lib/nav'
 
@@ -139,8 +139,10 @@ export function VideoPage() {
           </h1>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[13px] text-surface-600 sm:text-sm">
-            <span className="tabular-nums">{formatViews(video.views)}</span>
-            <span aria-hidden="true">·</span>
+            {/* TEMP: contagem de visualizacoes escondida a pedido do time.
+                Para voltar, reponha:
+                <span className="tabular-nums">{formatViews(video.views)}</span>
+                <span aria-hidden="true">·</span> */}
             <span>{formatRelativeDate(video.uploadDate)}</span>
             {video.status !== 'PUBLISHED' && (
               <Badge tone="neutral">{STATUS_LABEL[video.status] ?? video.status}</Badge>
