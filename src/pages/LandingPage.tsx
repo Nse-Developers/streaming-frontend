@@ -154,14 +154,29 @@ export function LandingPage() {
               )}
             </div>
             <div className="lg:col-span-6">
+              {/* Grade do hero: um destaque largo e dois menores. Com acervo
+                  real são os três vídeos de GET /landing, o mais visto no
+                  destaque — a ordem já vem pronta do backend. Sem ele, a grade
+                  de apresentação. */}
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                <div className="group relative col-span-2 overflow-hidden rounded-xl border border-surface-300 bg-surface-100 shadow-elevated">
-                  <img src="https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&w=1400&q=85" alt="Gravação em estúdio caseiro" className="aspect-[16/9] w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
-                  <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3 text-white"><div><span className="mb-2 inline-block rounded bg-brand-500 px-2 py-1 text-[10px] font-bold uppercase tracking-wider">Vídeo 4K</span><h2 className="font-display text-base font-bold sm:text-lg">O estúdio que cabe num quarto</h2><p className="mt-1 text-xs text-white/70">Marina Sales · 48 min · sem cortes comerciais</p></div><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-surface-900"><Play size={16} fill="currentColor" /></span></div>
-                </div>
-                <MiniFeature image="https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&w=700&q=80" title="Trinta potes até acertar um" label="Processo bruto" />
-                <MiniFeature image="https://images.unsplash.com/photo-1520045892732-304bc3ac5d8e?auto=format&fit=crop&w=700&q=80" title="Madrugada no 3º subsolo" label="Live técnica" />
+                {showcase ? (
+                  <>
+                    <HeroFeature video={showcase[0]} isAuthenticated={isAuthenticated} />
+                    {showcase.slice(1, 3).map((video) => (
+                      <HeroMini key={video.videoId} video={video} isAuthenticated={isAuthenticated} />
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <div className="group relative col-span-2 overflow-hidden rounded-xl border border-surface-300 bg-surface-100 shadow-elevated">
+                      <img src="https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&w=1400&q=85" alt="Gravação em estúdio caseiro" className="aspect-[16/9] w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+                      <div className="absolute bottom-4 left-4 right-4 text-white"><h2 className="font-display text-base font-bold sm:text-lg">O estúdio que cabe num quarto</h2><p className="mt-1 text-xs text-white/70">Um quarto, um computador e três anos de gravação</p></div>
+                    </div>
+                    <MiniFeature image="https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&w=700&q=80" title="Trinta potes até acertar um" />
+                    <MiniFeature image="https://images.unsplash.com/photo-1520045892732-304bc3ac5d8e?auto=format&fit=crop&w=700&q=80" title="Madrugada no 3º subsolo" />
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -183,13 +198,18 @@ export function LandingPage() {
 
         <section id="como-funciona" className="border-y border-surface-200/70 bg-surface-50 py-16 sm:py-24"><div className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8"><SectionHeading title="Como funciona: do primeiro acesso à publicação" description="Simples, sem labirintos de configurações ou termos obscuros. Escolha seu ritmo." align="left" /><div className="mt-12 grid gap-8 lg:grid-cols-2"><div className="space-y-3">{steps.map(([number, title, description], index) => <button type="button" key={number} onClick={() => setActiveStep(index)} className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-colors focus-ring ${activeStep === index ? 'border-brand-500 bg-surface-100' : 'border-surface-300 bg-surface-0 hover:bg-surface-100'}`}><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-mono text-xs font-bold ${activeStep === index ? 'bg-brand-500 text-white' : 'bg-surface-200 text-surface-600'}`}>{number}</span><span><strong className="font-display text-sm text-surface-900 sm:text-base">{title}</strong><span className="mt-1 block text-xs leading-relaxed text-surface-600 sm:text-sm">{description}</span></span></button>)}</div><div className="flex min-h-[300px] flex-col justify-center rounded-xl border border-surface-300 bg-surface-100 p-6 sm:p-8"><div className="flex items-center justify-between border-b border-surface-300 pb-4 text-xs"><strong className="uppercase tracking-wider text-brand-link">Passo {steps[activeStep][0]} · {activeStep === 2 ? 'Upload multiformato' : activeStep === 3 ? 'Interação respeitosa' : 'Sem burocracia'}</strong><span className="text-surface-600">byou.website</span></div><div className="py-8"><div className="mb-5 flex items-center gap-3"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-500 text-xl text-white">{activeStep === 0 ? '◌' : activeStep === 1 ? '✦' : activeStep === 2 ? '↑' : '♡'}</span><div><p className="font-display font-bold text-surface-900">{steps[activeStep][1]}</p><p className="mt-1 text-xs text-surface-600">Uma experiência feita para preservar seu processo.</p></div></div><div className="rounded-lg border border-dashed border-surface-300 bg-surface-50 p-5 text-center text-sm text-surface-600"><Check className="mx-auto mb-2 text-accent-ink" size={20} />Você decide o ritmo, o formato e quem participa.</div></div></div></div></div></section>
 
+        {/* Vitrine de apresentação: some quando há acervo real, porque o
+            hero já mostra esses mesmos três vídeos — GET /landing devolve no
+            máximo 3, e repeti-los aqui seria a mesma grade duas vezes na
+            mesma tela. Com mais vídeos na rota, esta seção volta a ter
+            conteúdo próprio. */}
+        {!showcase && (
         <section id="vitrine" className="mx-auto max-w-[1280px] px-4 py-16 sm:px-6 md:py-24 lg:px-8"><div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><SectionHeading align="left" title="Veja como é o feed de verdade" description="Sem clickbaits chamativos ou títulos em caixa alta enganosos." /><span className="inline-flex h-fit items-center gap-2 rounded-md border border-surface-300 bg-surface-100 px-3 py-2 text-xs text-surface-600"><span className="h-2 w-2 rounded-full bg-success-500" />Atualizado em tempo real</span></div>{/* Filtros por categoria valem só para o conteúdo de apresentação: GET
             /video não devolve categoria, então com acervo real não há o que
             filtrar — a barra sairia com um "Todos" sozinho. */}
-          {!showcase && <div className="mt-8 flex gap-2 overflow-x-auto pb-2">{filters.map((item) => <button type="button" key={item} onClick={() => setFilter(item)} className={`whitespace-nowrap rounded-md px-4 py-2 text-xs font-semibold focus-ring ${filter === item ? 'bg-brand-500 text-white' : 'border border-surface-300 bg-surface-100 text-surface-600 hover:bg-surface-200'}`}>{item}</button>)}</div>}
-          <div className={`mt-5 grid gap-5 sm:grid-cols-2 ${showcase ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>{showcase
-            ? showcase.map((video) => <ShowcaseCard key={video.videoId} video={video} isAuthenticated={isAuthenticated} />)
-            : filteredContent.map((item) => <article key={item.title} className="group overflow-hidden rounded-xl border border-surface-300 bg-surface-100"><div className="relative aspect-video overflow-hidden bg-surface-200"><img src={item.image} alt={item.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" /><span className="absolute left-2 top-2 rounded bg-black/75 px-2 py-1 text-[10px] font-bold uppercase text-white">{item.category}</span></div><div className="p-4"><h3 className="line-clamp-2 font-display text-sm font-bold leading-snug text-surface-900">{item.title}</h3><div className="mt-4 flex items-center gap-2 border-t border-surface-200 pt-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-[10px] font-bold text-white">{item.initials}</span><div className="min-w-0"><p className="truncate text-xs font-semibold text-surface-900">{item.creator}</p><p className="truncate text-[11px] text-surface-600">{item.meta}</p></div></div></div></article>)}</div></section>
+          <div className="mt-8 flex gap-2 overflow-x-auto pb-2">{filters.map((item) => <button type="button" key={item} onClick={() => setFilter(item)} className={`whitespace-nowrap rounded-md px-4 py-2 text-xs font-semibold focus-ring ${filter === item ? 'bg-brand-500 text-white' : 'border border-surface-300 bg-surface-100 text-surface-600 hover:bg-surface-200'}`}>{item}</button>)}</div>
+          <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{filteredContent.map((item) => <article key={item.title} className="group overflow-hidden rounded-xl border border-surface-300 bg-surface-100"><div className="relative aspect-video overflow-hidden bg-surface-200"><img src={item.image} alt={item.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" /><span className="absolute left-2 top-2 rounded bg-black/75 px-2 py-1 text-[10px] font-bold uppercase text-white">{item.category}</span></div><div className="p-4"><h3 className="line-clamp-2 font-display text-sm font-bold leading-snug text-surface-900">{item.title}</h3><div className="mt-4 flex items-center gap-2 border-t border-surface-200 pt-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-[10px] font-bold text-white">{item.initials}</span><div className="min-w-0"><p className="truncate text-xs font-semibold text-surface-900">{item.creator}</p><p className="truncate text-[11px] text-surface-600">{item.meta}</p></div></div></div></article>)}</div></section>
+        )}
 
         <section id="criadores" className="border-y border-surface-200/70 bg-surface-50 py-16 sm:py-24"><div className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8"><SectionHeading title="Histórias de quem parou de pedir licença" description="Criadores que encontraram no Byou a liberdade de publicar sua verdade." /><div className="mt-12 grid gap-5 md:grid-cols-3">{[['Marina Sales', 'Musicista independente', 'Num dia quero postar um riff incompleto, no outro um show de 2 horas. Aqui não precisei escolher nem me desculpar.'], ['Oficina Santa Cruz', 'Artesão e ceramista', 'Meu vídeo moldando um vaso em silêncio encontrou 40 mil visualizações qualificadas.'], ['Téo Anderson', 'Skatista & filmmaker', 'Ganhei um público que realmente se importa com o rolê, não com o material ser comercial o suficiente.']].map(([name, role, quote]) => <blockquote key={name} className="rounded-xl border border-surface-300 bg-surface-100 p-6"><span className="font-serif text-4xl leading-none text-brand-link">“</span><p className="mt-2 text-sm italic leading-relaxed text-surface-700">{quote}</p><footer className="mt-6 border-t border-surface-200 pt-4"><strong className="block font-display text-sm text-surface-900">{name}</strong><span className="text-xs text-accent-ink">{role}</span></footer></blockquote>)}</div></div></section>
 
@@ -203,66 +223,98 @@ export function LandingPage() {
   )
 }
 
-/** Card da vitrine com um vídeo REAL do acervo (GET /landing).
+/** Para onde levar o clique num vídeo da landing.
  *
- *  O destino depende da sessão, e essa é a regra do produto: a vitrine é
- *  aberta, dar play não é. `GET /landing` entrega só a capa — a URL do arquivo
- *  de vídeo mora em `GET /video/{id}`, que exige sessão. Um visitante anônimo
- *  que chegasse lá tomaria 403.
+ *  Uma função só porque a regra é a mesma nos dois lugares que mostram vídeo
+ *  aqui, e ela é do produto, não do componente: a landing entrega o card, nunca
+ *  o player. `GET /landing` não traz a URL do arquivo — ela vive em
+ *  `GET /video/{id}`, que exige sessão —, então o visitante anônimo precisa
+ *  passar pelo login antes.
  *
- *  Por isso, sem sessão o clique vai direto para /login com `state.from`
- *  apontando para o vídeo — o mesmo contrato que a AuthWall e os guards usam —,
- *  e quem entra ou se cadastra cai exatamente no vídeo que quis assistir.
- *  Direto para /login, e não para /videos/:id deixando a AuthWall barrar:
- *  quem está na landing ainda não decidiu ter conta, e a parede intermediária
- *  poria um passo entre o interesse e o cadastro. Dentro do app a AuthWall
- *  segue certa, porque ali a pessoa já estava navegando.
- *
- *  Sem selo de verificado e sem data: este payload é menor que o de
- *  `GET /video` e não traz `userIsVerified` nem `uploadDate`. A descrição entra
- *  no lugar — é o que o card tem de próprio além do título. */
-function ShowcaseCard({ video, isAuthenticated }: { video: LandingVideo; isAuthenticated: boolean }) {
-  const target = `/videos/${video.videoId}`
-  const initials = video.creatorName
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('')
+ *  `state.from` é o mesmo contrato dos guards e da AuthWall: quem entra ou se
+ *  cadastra volta para o vídeo que quis assistir, não para uma home genérica. */
+function watchLink(videoId: number, isAuthenticated: boolean) {
+  const target = `/videos/${videoId}`
+  return isAuthenticated ? { to: target } : { to: '/login', state: { from: target } }
+}
 
+/** Assinatura do criador — o lugar onde antes ficava um selo de categoria.
+ *
+ *  A etiqueta anterior ("Vídeo 4K", "Processo bruto") era inventada, e a rota
+ *  não devolve categoria alguma. O criador, que ela devolve, também diz mais
+ *  sobre este produto: o que se oferece aqui é a pessoa, não a especificação
+ *  técnica do arquivo. Daí o tratamento de crédito de autoria — versalete
+ *  espaçado atrás de um filete — em vez de pílula de badge.
+ *
+ *  Sobre a capa é branco, e não `accent-ink`: ali o fundo é a imagem sob um
+ *  gradiente preto nos DOIS temas, e o accent do tema claro (#0f7a5c)
+ *  desapareceria nele — a mesma razão documentada no `tone="media"` do
+ *  VerifiedBadge. */
+function CreatorCredit({ name, tone }: { name: string; tone: 'media' | 'surface' }) {
+  const onMedia = tone === 'media'
+  return (
+    <span className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] ${onMedia ? 'text-white/85' : 'text-surface-600'}`}>
+      <span aria-hidden="true" className={`h-3 w-px shrink-0 ${onMedia ? 'bg-white/50' : 'bg-surface-400'}`} />
+      <span className="truncate">{name}</span>
+    </span>
+  )
+}
+
+/** Destaque do hero: o vídeo mais visto do acervo. */
+function HeroFeature({ video, isAuthenticated }: { video: LandingVideo; isAuthenticated: boolean }) {
   return (
     <Link
-      to={isAuthenticated ? target : '/login'}
-      state={isAuthenticated ? undefined : { from: target }}
-      className="group block overflow-hidden rounded-xl border border-surface-300 bg-surface-100 focus-ring"
+      {...watchLink(video.videoId, isAuthenticated)}
+      className="group relative col-span-2 block overflow-hidden rounded-xl border border-surface-300 bg-surface-100 shadow-elevated focus-ring"
     >
-      <div className="relative aspect-video overflow-hidden bg-surface-200">
-        {/* `thumbnailUrl` é assinado e expira em 24 h; quando vence, a imagem
-            quebra e o alt vazio deixa o espaço limpo até o refetch por foco
-            (ver useLanding) trazer uma URL nova. */}
-        <img src={video.thumbnailUrl} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-        <span className="absolute inset-0 flex items-center justify-center transition-colors group-hover:bg-black/30">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-surface-900 opacity-0 shadow-elevated transition-opacity group-hover:opacity-100">
-            <Play size={20} fill="currentColor" className="ml-0.5" />
-          </span>
+      <img src={video.thumbnailUrl} alt="" className="aspect-[16/9] w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+      <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
+
+      {/* Play só no hover no ponteiro fino; no toque não existe hover e o
+          destaque ficaria sem nenhum sinal de que é clicável. */}
+      <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-200 max-sm:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-surface-900 shadow-elevated">
+          <Play size={18} fill="currentColor" className="ml-0.5" />
         </span>
-      </div>
-      <div className="p-4">
-        <h3 className="line-clamp-2 font-display text-sm font-bold leading-snug text-surface-900">{video.tittle}</h3>
+      </span>
+
+      <div className="absolute inset-x-4 bottom-4 text-white">
+        <CreatorCredit name={video.creatorName} tone="media" />
+        <h2 className="mt-1.5 line-clamp-2 font-display text-base font-bold leading-snug sm:text-lg">{video.tittle}</h2>
         {video.description && (
-          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-surface-600">{video.description}</p>
+          // Uma linha só: o bloco cresce para CIMA sobre a capa, e duas linhas
+          // num título longo empurrariam o texto para a parte clara da imagem.
+          <p className="mt-1 line-clamp-1 text-xs text-white/70">{video.description}</p>
         )}
-        <div className="mt-4 flex items-center gap-2 border-t border-surface-200 pt-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-[10px] font-bold text-white">{initials}</span>
-          <p className="min-w-0 truncate text-xs font-semibold text-surface-900">{video.creatorName}</p>
-        </div>
       </div>
     </Link>
   )
 }
 
-function MiniFeature({ image, title, label }: { image: string; title: string; label: string }) {
-  return <div className="group overflow-hidden rounded-lg border border-surface-300 bg-surface-100"><div className="relative aspect-video overflow-hidden"><img src={image} alt={title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /><span className="absolute left-2 top-2 rounded bg-black/75 px-1.5 py-1 text-[9px] font-bold uppercase text-white">{label}</span></div><p className="truncate p-3 font-display text-xs font-bold text-surface-900">{title}</p></div>
+/** Os dois menores do hero. Ganharam o criador: sem ele o card era só um
+ *  título sobre uma imagem, e era o que deixava a grade muda. */
+function HeroMini({ video, isAuthenticated }: { video: LandingVideo; isAuthenticated: boolean }) {
+  return (
+    <Link
+      {...watchLink(video.videoId, isAuthenticated)}
+      className="group block overflow-hidden rounded-lg border border-surface-300 bg-surface-100 focus-ring"
+    >
+      <div className="relative aspect-video overflow-hidden">
+        <img src={video.thumbnailUrl} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+      </div>
+      {/* Crédito ANTES do título, como no destaque: a assinatura precedendo a
+          obra é o padrão que a grade inteira repete, e é a hierarquia que este
+          produto defende — a pessoa vem antes do conteúdo. */}
+      <div className="p-3">
+        <CreatorCredit name={video.creatorName} tone="surface" />
+        <p className="mt-1.5 truncate font-display text-xs font-bold text-surface-900">{video.tittle}</p>
+      </div>
+    </Link>
+  )
+}
+
+function MiniFeature({ image, title }: { image: string; title: string }) {
+  return <div className="group overflow-hidden rounded-lg border border-surface-300 bg-surface-100"><div className="relative aspect-video overflow-hidden"><img src={image} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /></div><p className="truncate p-3 font-display text-xs font-bold text-surface-900">{title}</p></div>
 }
 
 function SectionHeading({ title, description, align = 'center' }: { title: string; description: string; align?: 'left' | 'center' }) {
