@@ -4,6 +4,7 @@ import {
   clearCsrfToken,
   clearSessionToken,
   http,
+  publicHttp,
   setCsrfToken,
   setSessionToken,
 } from './client'
@@ -13,6 +14,7 @@ import {
   safeExternalUrl,
 } from '@/lib/validation'
 import type {
+  LandingResponse,
   CategoryRequest,
   CategoryResponse,
   CommentResponse,
@@ -545,5 +547,16 @@ export const followApi = {
 
   async unfollow(followedId: number) {
     await http.post(`/follow/users/${followedId}/unfollow`)
+  },
+}
+
+export const landingApi = {
+  /** GET /landing — números e vitrine da home pública, numa chamada só.
+   *
+   *  `publicHttp` e não `http`: esta rota tem de ser chamada sem cookie e sem
+   *  Authorization (ver client.ts). */
+  async get() {
+    const { data } = await publicHttp.get<LandingResponse>('/landing')
+    return data
   },
 }

@@ -380,3 +380,41 @@ export interface ExceptionResponse {
   error: string
   message: string
 }
+
+/* GET /landing — a ÚNICA rota pública do sistema (SecurityConfig: permitAll no
+ * GET). Alimenta a home de visitante numa chamada só, e por isso NÃO pode ser
+ * chamada com cookie nem Authorization: ver publicHttp em client.ts. */
+
+export interface LandingStats {
+  /** Vídeos PUBLICADOS. Rascunho, privado, em processamento e deletado ficam
+   *  de fora — o número não bate com o total do banco, e é proposital. */
+  videosCount: number
+  /** Contas com userTypeAccount = CREATORS. */
+  creators: number
+  /** Contas com userTypeAccount = VIEWERS. */
+  viewers: number
+}
+
+/** Payload deliberadamente menor que o de GET /video/{id}: não traz a URL do
+ *  arquivo de vídeo, só a da thumbnail. É o que permite a rota ser pública sem
+ *  vazar o conteúdo — para tocar é GET /video/{id}, que exige sessão. */
+export interface LandingVideo {
+  /** `videoId` aqui, e não `videId`/`video_id` como em VideoResponse: é outro
+   *  DTO no backend (VideosLadingResponse), não o mesmo com campo renomeado. */
+  videoId: number
+  /** Sim, dois "t" — é o nome real do campo no JSON, como em VideoResponse. */
+  tittle: string
+  description: string
+  /** URL ASSINADA que expira em 24 h. Não persistir nem cachear por muito
+   *  tempo: numa aba deixada aberta a imagem quebra, e a correção é refazer
+   *  GET /landing, não guardar a URL. */
+  thumbnailUrl: string
+  creatorName: string
+}
+
+export interface LandingResponse {
+  stats: LandingStats
+  /** Os 3 publicados com mais views, já em ordem decrescente. Vem no máximo 3
+   *  e vem VAZIO enquanto não houver vídeo publicado. */
+  videos: LandingVideo[]
+}

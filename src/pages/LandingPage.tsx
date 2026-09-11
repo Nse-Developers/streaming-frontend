@@ -1,14 +1,13 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { ArrowRight, Check, ChevronDown, Moon, Play, Search, Sun } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Logo } from '@/components/layout/Logo'
 import { APP_HOME } from '@/lib/nav'
 import { useTheme } from '@/context/ThemeContext'
 import { useAuth } from '@/context/AuthContext'
-import { useShowcaseVideos } from '@/hooks/useVideos'
-import { VerifiedBadge } from '@/components/user/VerifiedBadge'
-import { formatRelativeDate } from '@/lib/format'
-import type { UiVideo } from '@/lib/video'
+import { useLanding, useShowcase } from '@/hooks/useLanding'
+import type { LandingVideo } from '@/api/types'
+import { formatCompact } from '@/lib/format'
 
 const content = [
   {
@@ -68,9 +67,29 @@ export function LandingPage() {
   const filteredContent = filter === 'Todos' ? content : content.filter((item) => item.category === filter)
   const filters = ['Todos', ...content.map((item) => item.category)]
 
-  // Acervo real quando a rota responde; `null` mantém a vitrine de
-  // apresentação. Ver useShowcaseVideos para por que o fallback existe.
-  const showcase = useShowcaseVideos()
+  // Acervo real quando GET /landing responde; `null` mantém a vitrine de
+  // apresentação. Ver useShowcase para por que o fallback existe.
+  const stats = useLanding().data?.stats
+  const showcase = useShowcase()
+
+  // Números do marquee. Com `stats` reais a régua de apresentação sai inteira:
+  // manter "+1.200 horas" ao lado de uma contagem verdadeira misturaria dado e
+  // enfeite na mesma linha, e o visitante não teria como saber qual é qual.
+  // "4 formatos suportados" fica nos dois casos — é uma característica do
+  // produto, não uma métrica de acervo.
+  const marqueeItems = stats
+    ? [
+        `${formatCompact(stats.videosCount)} ${stats.videosCount === 1 ? 'vídeo publicado' : 'vídeos publicados'}`,
+        `${formatCompact(stats.creators)} ${stats.creators === 1 ? 'criador independente' : 'criadores independentes'}`,
+        `${formatCompact(stats.viewers)} ${stats.viewers === 1 ? 'espectador' : 'espectadores'}`,
+        '4 formatos suportados',
+      ]
+    : [
+        '+1.200 horas de conteúdo real',
+        '+350 criadores independentes',
+        '4 formatos suportados',
+        '+18 mil reproduções sem corte esta semana',
+      ]
 
   return (
     <div className="min-h-dvh overflow-x-hidden bg-surface-0 text-surface-900">
@@ -148,7 +167,10 @@ export function LandingPage() {
           </div>
         </section>
 
-        <div className="overflow-hidden border-b border-surface-200/70 bg-surface-50 py-4"><div className="landing-marquee flex min-w-max items-center gap-8 text-xs font-medium text-surface-600 sm:text-sm"><span className="font-semibold text-surface-900">+1.200 horas de conteúdo real</span><span>·</span><span>+350 criadores independentes</span><span>·</span><span>4 formatos suportados</span><span>·</span><span>+18 mil reproduções sem corte esta semana</span><span>·</span><span className="font-semibold text-surface-900">+1.200 horas de conteúdo real</span><span>·</span><span>+350 criadores independentes</span></div></div>
+        {/* Marquee: números reais quando GET /landing responde, senão a régua de
+            apresentação. A lista é duplicada porque o efeito de rolagem contínua
+            depende de a faixa ter mais que uma tela de largura. */}
+        <div className="overflow-hidden border-b border-surface-200/70 bg-surface-50 py-4"><div className="landing-marquee flex min-w-max items-center gap-8 text-xs font-medium text-surface-600 sm:text-sm">{[...marqueeItems, ...marqueeItems].map((item, index) => <Fragment key={`${item}-${index}`}>{index > 0 && <span>·</span>}<span className={index % marqueeItems.length === 0 ? 'font-semibold text-surface-900' : undefined}>{item}</span></Fragment>)}</div></div>
 
         <section className="mx-auto max-w-[1280px] px-4 py-16 sm:px-6 md:py-24 lg:px-8">
           <SectionHeading title="Feito para quem cria, não para agradar robôs" description="Cada detalhe do Byou foi desenhado para eliminar a pressão estética e a censura algorítmica." />
@@ -165,8 +187,8 @@ export function LandingPage() {
             /video não devolve categoria, então com acervo real não há o que
             filtrar — a barra sairia com um "Todos" sozinho. */}
           {!showcase && <div className="mt-8 flex gap-2 overflow-x-auto pb-2">{filters.map((item) => <button type="button" key={item} onClick={() => setFilter(item)} className={`whitespace-nowrap rounded-md px-4 py-2 text-xs font-semibold focus-ring ${filter === item ? 'bg-brand-500 text-white' : 'border border-surface-300 bg-surface-100 text-surface-600 hover:bg-surface-200'}`}>{item}</button>)}</div>}
-          <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">{showcase
-            ? showcase.map((video) => <ShowcaseCard key={video.key} video={video} isAuthenticated={isAuthenticated} />)
+          <div className={`mt-5 grid gap-5 sm:grid-cols-2 ${showcase ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>{showcase
+            ? showcase.map((video) => <ShowcaseCard key={video.videoId} video={video} isAuthenticated={isAuthenticated} />)
             : filteredContent.map((item) => <article key={item.title} className="group overflow-hidden rounded-xl border border-surface-300 bg-surface-100"><div className="relative aspect-video overflow-hidden bg-surface-200"><img src={item.image} alt={item.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" /><span className="absolute left-2 top-2 rounded bg-black/75 px-2 py-1 text-[10px] font-bold uppercase text-white">{item.category}</span></div><div className="p-4"><h3 className="line-clamp-2 font-display text-sm font-bold leading-snug text-surface-900">{item.title}</h3><div className="mt-4 flex items-center gap-2 border-t border-surface-200 pt-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-[10px] font-bold text-white">{item.initials}</span><div className="min-w-0"><p className="truncate text-xs font-semibold text-surface-900">{item.creator}</p><p className="truncate text-[11px] text-surface-600">{item.meta}</p></div></div></div></article>)}</div></section>
 
         <section id="criadores" className="border-y border-surface-200/70 bg-surface-50 py-16 sm:py-24"><div className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8"><SectionHeading title="Histórias de quem parou de pedir licença" description="Criadores que encontraram no Byou a liberdade de publicar sua verdade." /><div className="mt-12 grid gap-5 md:grid-cols-3">{[['Marina Sales', 'Musicista independente', 'Num dia quero postar um riff incompleto, no outro um show de 2 horas. Aqui não precisei escolher nem me desculpar.'], ['Oficina Santa Cruz', 'Artesão e ceramista', 'Meu vídeo moldando um vaso em silêncio encontrou 40 mil visualizações qualificadas.'], ['Téo Anderson', 'Skatista & filmmaker', 'Ganhei um público que realmente se importa com o rolê, não com o material ser comercial o suficiente.']].map(([name, role, quote]) => <blockquote key={name} className="rounded-xl border border-surface-300 bg-surface-100 p-6"><span className="font-serif text-4xl leading-none text-brand-link">“</span><p className="mt-2 text-sm italic leading-relaxed text-surface-700">{quote}</p><footer className="mt-6 border-t border-surface-200 pt-4"><strong className="block font-display text-sm text-surface-900">{name}</strong><span className="text-xs text-accent-ink">{role}</span></footer></blockquote>)}</div></div></section>
@@ -181,25 +203,26 @@ export function LandingPage() {
   )
 }
 
-/** Card da vitrine com um vídeo REAL do acervo.
+/** Card da vitrine com um vídeo REAL do acervo (GET /landing).
  *
- *  O destino depende da sessão, e essa é a regra do produto: a lista é
- *  aberta, dar play não é. Sem sessão o clique vai direto para /login com
- *  `state.from` apontando para o vídeo — o mesmo contrato que a AuthWall e os
- *  guards usam —, então quem entra ou se cadastra cai exatamente no vídeo que
- *  quis assistir, e não numa home genérica.
+ *  O destino depende da sessão, e essa é a regra do produto: a vitrine é
+ *  aberta, dar play não é. `GET /landing` entrega só a capa — a URL do arquivo
+ *  de vídeo mora em `GET /video/{id}`, que exige sessão. Um visitante anônimo
+ *  que chegasse lá tomaria 403.
  *
- *  Direto para /login, e não para /videos/:id deixando a AuthWall barrar: quem
- *  está na landing ainda não decidiu ter conta, e a parede intermediária
- *  acrescentaria um passo entre o interesse e o cadastro. Dentro do app a
- *  AuthWall continua sendo o caminho certo, porque ali a pessoa já estava
- *  navegando e perder o contexto é que seria custoso.
+ *  Por isso, sem sessão o clique vai direto para /login com `state.from`
+ *  apontando para o vídeo — o mesmo contrato que a AuthWall e os guards usam —,
+ *  e quem entra ou se cadastra cai exatamente no vídeo que quis assistir.
+ *  Direto para /login, e não para /videos/:id deixando a AuthWall barrar:
+ *  quem está na landing ainda não decidiu ter conta, e a parede intermediária
+ *  poria um passo entre o interesse e o cadastro. Dentro do app a AuthWall
+ *  segue certa, porque ali a pessoa já estava navegando.
  *
- *  Sem contagem de visualizações, acompanhando a decisão do time de escondê-la
- *  no app inteiro (ver os TEMP em VideoCard/HeroVideo): a landing mostraria o
- *  número que o resto do produto deixou de mostrar. */
-function ShowcaseCard({ video, isAuthenticated }: { video: UiVideo; isAuthenticated: boolean }) {
-  const target = `/videos/${video.id}`
+ *  Sem selo de verificado e sem data: este payload é menor que o de
+ *  `GET /video` e não traz `userIsVerified` nem `uploadDate`. A descrição entra
+ *  no lugar — é o que o card tem de próprio além do título. */
+function ShowcaseCard({ video, isAuthenticated }: { video: LandingVideo; isAuthenticated: boolean }) {
+  const target = `/videos/${video.videoId}`
   const initials = video.creatorName
     .split(' ')
     .filter(Boolean)
@@ -214,10 +237,11 @@ function ShowcaseCard({ video, isAuthenticated }: { video: UiVideo; isAuthentica
       className="group block overflow-hidden rounded-xl border border-surface-300 bg-surface-100 focus-ring"
     >
       <div className="relative aspect-video overflow-hidden bg-surface-200">
-        {/* `safeThumbnail` já passou pela validação de URL; o hook descarta os
-            vídeos sem capa, então aqui ela sempre existe. */}
-        <img src={video.safeThumbnail!} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-        <span className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/30">
+        {/* `thumbnailUrl` é assinado e expira em 24 h; quando vence, a imagem
+            quebra e o alt vazio deixa o espaço limpo até o refetch por foco
+            (ver useLanding) trazer uma URL nova. */}
+        <img src={video.thumbnailUrl} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+        <span className="absolute inset-0 flex items-center justify-center transition-colors group-hover:bg-black/30">
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-surface-900 opacity-0 shadow-elevated transition-opacity group-hover:opacity-100">
             <Play size={20} fill="currentColor" className="ml-0.5" />
           </span>
@@ -225,15 +249,12 @@ function ShowcaseCard({ video, isAuthenticated }: { video: UiVideo; isAuthentica
       </div>
       <div className="p-4">
         <h3 className="line-clamp-2 font-display text-sm font-bold leading-snug text-surface-900">{video.tittle}</h3>
+        {video.description && (
+          <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-surface-600">{video.description}</p>
+        )}
         <div className="mt-4 flex items-center gap-2 border-t border-surface-200 pt-3">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-[10px] font-bold text-white">{initials}</span>
-          <div className="min-w-0">
-            <p className="flex items-center gap-1 truncate text-xs font-semibold text-surface-900">
-              {video.creatorName}
-              <VerifiedBadge verified={video.userIsVerified} size="sm" />
-            </p>
-            <p className="truncate text-[11px] text-surface-600">{formatRelativeDate(video.uploadDate)}</p>
-          </div>
+          <p className="min-w-0 truncate text-xs font-semibold text-surface-900">{video.creatorName}</p>
         </div>
       </div>
     </Link>

@@ -15,6 +15,25 @@ import type { CsrfTokenResponse, ExceptionResponse } from './types'
  *  vazar credenciais em silêncio. */
 export const API_BASE_URL = import.meta.env.DEV ? '/api' : import.meta.env.VITE_API_URL
 
+/** Cliente para a única rota pública (GET /landing), SEM sessão.
+ *
+ *  Instância separada porque o que o `http` faz de útil é justamente o que
+ *  atrapalha aqui: ele anexa `Authorization` sempre que existe um token e vai
+ *  com `withCredentials`. Isso não é só desnecessário na landing — é nocivo.
+ *  Como o próprio interceptor abaixo documenta, o Spring recusa a request
+ *  INTEIRA com 403 quando recebe um Bearer vencido, em vez de tratá-la como
+ *  anônima. A landing é a porta de entrada do produto e tem de abrir para
+ *  qualquer um, inclusive para quem voltou ao site com a sessão de ontem
+ *  morta no sessionStorage.
+ *
+ *  Sem interceptors de propósito: não há token para renovar, não há CSRF a
+ *  mandar (é GET) e um 401/403 aqui não deve derrubar sessão nenhuma. */
+export const publicHttp: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: false,
+})
+
 export const http: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
